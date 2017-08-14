@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+  
+  
+  
+  
+
+  
+    
+    
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    
+    
+    <link href="//fonts.googleapis.com/css?family=Lato:300,300italic,400,400italic,700,700italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+  
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.2" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="spring," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=5.1.2" />
+
+
+
+
+
+
+<meta name="description" content="ApplicationContextbeanFactory和ApplicationContext的区别 &amp;#8194;&amp;#8194;&amp;#8194;&amp;#8194;BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。&amp;#8194;&amp;#8">
+<meta name="keywords" content="spring">
+<meta property="og:type" content="article">
+<meta property="og:title" content="spring-applicationContext">
+<meta property="og:url" content="http://yoursite.com/2017/08/11/spring-applicationContext/index.html">
+<meta property="og:site_name" content="总得留下点什么">
+<meta property="og:description" content="ApplicationContextbeanFactory和ApplicationContext的区别 &amp;#8194;&amp;#8194;&amp;#8194;&amp;#8194;BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。&amp;#8194;&amp;#8">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2017-08-14T04:54:13.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="spring-applicationContext">
+<meta name="twitter:description" content="ApplicationContextbeanFactory和ApplicationContext的区别 &amp;#8194;&amp;#8194;&amp;#8194;&amp;#8194;BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。&amp;#8194;&amp;#8">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    sidebar: {"position":"left","display":"post","offset":12,"offset_float":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: true,
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2017/08/11/spring-applicationContext/"/>
+
+
+
+
+
+  <title>spring-applicationContext | 总得留下点什么</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">总得留下点什么</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">技术随笔</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/11/spring-applicationContext/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">spring-applicationContext</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-11T15:16:28+08:00">
+                2017-08-11
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/spring/" itemprop="url" rel="index">
+                    <span itemprop="name">spring</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="ApplicationContext"><a href="#ApplicationContext" class="headerlink" title="ApplicationContext"></a>ApplicationContext</h1><h3 id="beanFactory和ApplicationContext的区别"><a href="#beanFactory和ApplicationContext的区别" class="headerlink" title="beanFactory和ApplicationContext的区别"></a>beanFactory和ApplicationContext的区别</h3><blockquote>
+<p>&#8194;&#8194;&#8194;&#8194;BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。<br>&#8194;&#8194;&#8194;&#8194;ApplicationContext接口,它由BeanFactory接口派生而来，因而提供BeanFactory所有的功能。ApplicationContext以一种更向面向框架的方式工作以及对上下文进行分层和实现继承，ApplicationContext包还提供了以下的功能：  </p>
+<ul>
+<li>MessageSource, 提供国际化的消息访问  </li>
+<li>资源访问，如URL和文件: ApplicationContext扩展了ResourceLoader(资源加载器)接口，从而可以用来加载多个Resource，而BeanFactory是没有扩展ResourceLoader.  </li>
+<li>事件传播  </li>
+<li>载入多个（有继承关系）上下文 ，使得每一个上下文都专注于一个特定的层次，比如应用的web层.<br>&#8194;&#8194;BeanFactroy采用的是延迟加载形式来注入Bean的，即只有在使用到某个Bean时(调用getBean())，才对该Bean进行加载实例化，这样，我们就不能发现一些存在的Spring的配置问题。而ApplicationContext则相反，它是在容器启动时，一次性创建了所有的Bean。这样，在容器启动时，我们就可以发现Spring中存在的配置错误。<br>&#8194;&#8194;BeanFactory和ApplicationContext都支持BeanPostProcessor、BeanFactoryPostProcessor的使用，但两者之间的区别是：BeanFactory需要手动注册，而ApplicationContext则是自动注册</li>
+</ul>
+</blockquote>
+<h3 id="功能扩展"><a href="#功能扩展" class="headerlink" title="功能扩展"></a>功能扩展</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div></pre></td><td class="code"><pre><div class="line">protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) &#123;</div><div class="line">		// 设置类加载器为当前加载器</div><div class="line">		beanFactory.setBeanClassLoader(getClassLoader());</div><div class="line">		</div><div class="line">		// 增加对el表达式的支持</div><div class="line">		beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));</div><div class="line">		</div><div class="line">		// 增加bean的属性编辑.例如Bean的属性为Date类型时，无法直接注入，则需要使用自定义的属性编辑器</div><div class="line">		beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this, getEnvironment()));</div><div class="line"></div><div class="line">		// 添加BeanPostProcessor</div><div class="line">		beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this));</div><div class="line">		</div><div class="line">		// 设置几个忽略自动装配的接口</div><div class="line">		beanFactory.ignoreDependencyInterface(EnvironmentAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(EmbeddedValueResolverAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(ApplicationEventPublisherAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(MessageSourceAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(ApplicationContextAware.class);</div><div class="line"></div><div class="line">		// 注册依赖的类，一旦检测到属性为BeanFactory类型便会将beanFactory的实例注册进去</div><div class="line">		beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory);</div><div class="line">		beanFactory.registerResolvableDependency(ResourceLoader.class, this);</div><div class="line">		beanFactory.registerResolvableDependency(ApplicationEventPublisher.class, this);</div><div class="line">		beanFactory.registerResolvableDependency(ApplicationContext.class, this);</div><div class="line"></div><div class="line">		// Register early post-processor for detecting inner beans as ApplicationListeners.</div><div class="line">		beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(this));</div><div class="line"></div><div class="line">		// 增加对AspectJ的支持</div><div class="line">		if (beanFactory.containsBean(LOAD_TIME_WEAVER_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.addBeanPostProcessor(new LoadTimeWeaverAwareProcessor(beanFactory));</div><div class="line">			// Set a temporary ClassLoader for type matching.</div><div class="line">			beanFactory.setTempClassLoader(new ContextTypeMatchClassLoader(beanFactory.getBeanClassLoader()));</div><div class="line">		&#125;</div><div class="line"></div><div class="line">		// Register default environment beans.</div><div class="line">		if (!beanFactory.containsLocalBean(ENVIRONMENT_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.registerSingleton(ENVIRONMENT_BEAN_NAME, getEnvironment());</div><div class="line">		&#125;</div><div class="line">		if (!beanFactory.containsLocalBean(SYSTEM_PROPERTIES_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.registerSingleton(SYSTEM_PROPERTIES_BEAN_NAME, getEnvironment().getSystemProperties());</div><div class="line">		&#125;</div><div class="line">		if (!beanFactory.containsLocalBean(SYSTEM_ENVIRONMENT_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.registerSingleton(SYSTEM_ENVIRONMENT_BEAN_NAME, getEnvironment().getSystemEnvironment());</div><div class="line">		&#125;</div><div class="line">	&#125;</div></pre></td></tr></table></figure>
+<h2 id="BeanFactoryPostProcessor-容器级别的Bean扩展器"><a href="#BeanFactoryPostProcessor-容器级别的Bean扩展器" class="headerlink" title="BeanFactoryPostProcessor 容器级别的Bean扩展器"></a>BeanFactoryPostProcessor 容器级别的Bean扩展器</h2><blockquote>
+<p>BeanFactoryPostProcessor的作用域范围是容器级的，仅对容器中的Bean进行后置处理。<br>比较典型的几种<br> 1， PropertyPlaceholderConfigurer : 对容器中的所有引用的属性值替换</p>
+</blockquote>
+<pre><code><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line">   public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException &#123;</div><div class="line">	try &#123;</div><div class="line">		Properties mergedProps = mergeProperties();</div><div class="line"></div><div class="line">		// Convert the merged properties, if necessary.</div><div class="line">		convertProperties(mergedProps);</div><div class="line"></div><div class="line">		// Let the subclass process the properties.</div><div class="line">		processProperties(beanFactory, mergedProps);</div><div class="line">	&#125;</div><div class="line">	catch (IOException ex) &#123;</div><div class="line">		throw new BeanInitializationException(&quot;Could not load properties&quot;, ex);</div><div class="line">	&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+</code></pre><p> 2， BeanDefinitionRegistryPostProcessor： 对BeanDefinition进行一些后置的自定义操作<br> <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div></pre></td><td class="code"><pre><div class="line"> import org.springframework.beans.BeansException;</div><div class="line"> import org.springframework.beans.factory.support.BeanDefinitionRegistry;</div><div class="line"> import  org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;</div><div class="line"> import org.springframework.beans.factory.support.RootBeanDefinition;</div><div class="line"> import org.springframework.stereotype.Component;</div><div class="line"> </div><div class="line">@Component</div><div class="line">public class CustomServiceRegistryPostProcessor </div><div class="line">        implements BeanDefinitionRegistryPostProcessor &#123;</div><div class="line"> </div><div class="line">    @Override</div><div class="line">    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry)</div><div class="line">            throws BeansException &#123;</div><div class="line"> </div><div class="line">        RootBeanDefinition beanDefinition = </div><div class="line">                new RootBeanDefinition(MyServiceImpl.class); //Service实现</div><div class="line">        serviceDefinition.setTargetType(MyService.class); //Service接口</div><div class="line">        serviceDefinition.setRole(BeanDefinition.ROLE_APPLICATION);</div><div class="line">        registry.registerBeanDefinition(&quot;myBeanName&quot;, beanDefinition );</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h3 id="应用"><a href="#应用" class="headerlink" title="应用"></a>应用</h3><p> 在Mybatis与Spring的整合中，就利用到了BeanDefinitionRegistryPostProcessor来对Mapper的BeanDefinition进行了后置的自定义处理。</p>
+<p>在Spring的配置文件中，我们会配置以下代码来扫描Mapper：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">&lt;bean class=&quot;org.mybatis.spring.mapper.MapperScannerConfigurer&quot;&gt;</div><div class="line">	&lt;property name=&quot;basePackage&quot; value=&quot;com.rason.nba.mapper&quot; /&gt;</div><div class="line">	&lt;property name=&quot;sqlSessionFactoryBeanName&quot; value=&quot;sqlSessionFactory&quot;&gt;&lt;/property&gt;</div><div class="line">&lt;/bean&gt;</div></pre></td></tr></table></figure></p>
+<p>其中org.mybatis.spring.mapper.MapperScannerConfigurer类就实现了BeanDefinitionRegistryPostProcessor接口来对Mapper进行自定义的注册操作。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line">// 代码有删减</div><div class="line">public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProcessor&#123;</div><div class="line">    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException &#123;</div><div class="line">	    ClassPathMapperScanner scanner = new ClassPathMapperScanner(registry);</div><div class="line">	    scanner.scan(StringUtils.tokenizeToStringArray(this.basePackage, </div><div class="line">  	&#125;</div><div class="line">&#125;</div><div class="line">public class ClassPathMapperScanner extends ClassPathBeanDefinitionScanner &#123;</div><div class="line">	@Override</div><div class="line">    public Set&lt;BeanDefinitionHolder&gt; doScan(String... basePackages) &#123;</div><div class="line"> 		Set&lt;BeanDefinitionHolder&gt; beanDefinitions = super.doScan(basePackages);//首先调用Spring默认的扫描装配操作</div><div class="line">	    if (beanDefinitions.isEmpty()) &#123;</div><div class="line">	</div><div class="line">		&#125; else &#123;</div><div class="line">			for (BeanDefinitionHolder holder : beanDefinitions) &#123;//然后循环对每一个BeanDefinition进行一些自定义的操作</div><div class="line">				GenericBeanDefinition definition = (GenericBeanDefinition) holder.getBeanDefinition();</div><div class="line">				definition.getPropertyValues().add(&quot;mapperInterface&quot;, definition.getBeanClassName());</div><div class="line">        		definition.setBeanClass(MapperFactoryBean.class);</div><div class="line">        		definition.getPropertyValues().add(&quot;addToConfig&quot;, this.addToConfig);</div><div class="line">			&#125;</div><div class="line">		&#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/spring/" rel="tag"># spring</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/08/11/spring-annotation/" rel="next" title="spring annotation">
+                <i class="fa fa-chevron-left"></i> spring annotation
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/08/14/spring-extendion/" rel="prev" title="容器扩展点">
+                容器扩展点 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/avatar.jpeg"
+               alt="蔡世滨" />
+          <p class="site-author-name" itemprop="name">蔡世滨</p>
+           
+              <p class="site-description motion-element" itemprop="description"></p>
+          
+        </div>
+        <nav class="site-state motion-element">
+
+          
+            <div class="site-state-item site-state-posts">
+              <a href="/archives/">
+                <span class="site-state-item-count">4</span>
+                <span class="site-state-item-name">日志</span>
+              </a>
+            </div>
+          
+
+          
+            
+            
+            <div class="site-state-item site-state-categories">
+              <a href="/categories/index.html">
+                <span class="site-state-item-count">1</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            
+            
+            <div class="site-state-item site-state-tags">
+              <a href="/tags/index.html">
+                <span class="site-state-item-count">1</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/caishibin" target="_blank" title="GitHub">
+                  
+                    <i class="fa fa-fw fa-github"></i>
+                  
+                    
+                      GitHub
+                    
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+          <div class="cc-license motion-element" itemprop="license">
+            <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" target="_blank">
+              <img src="/images/cc-by-nc-sa.svg" alt="Creative Commons" />
+            </a>
+          </div>
+        
+
+        
+        
+
+        
+
+
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#ApplicationContext"><span class="nav-number">1.</span> <span class="nav-text">ApplicationContext</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#beanFactory和ApplicationContext的区别"><span class="nav-number">1.0.1.</span> <span class="nav-text">beanFactory和ApplicationContext的区别</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#功能扩展"><span class="nav-number">1.0.2.</span> <span class="nav-text">功能扩展</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanFactoryPostProcessor-容器级别的Bean扩展器"><span class="nav-number">1.1.</span> <span class="nav-text">BeanFactoryPostProcessor 容器级别的Bean扩展器</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#应用"><span class="nav-number">1.1.1.</span> <span class="nav-text">应用</span></a></li></ol></li></ol></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy; 
+  <span itemprop="copyrightYear">2017</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">蔡世滨</span>
+</div>
+
+
+<div class="powered-by">
+  由 <a class="theme-link" href="https://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Gemini
+  </a>
+</div>
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  
+  <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  
+  <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.2"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.2"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.2"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.2"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.2"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.2"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.2"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

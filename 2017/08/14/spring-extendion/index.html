@@ -78,7 +78,7 @@
 <link href="/css/main.css?v=5.1.2" rel="stylesheet" type="text/css" />
 
 
-  <meta name="keywords" content="Hexo, NexT" />
+  <meta name="keywords" content="spring," />
 
 
 
@@ -94,14 +94,18 @@
 
 
 
-<meta property="og:type" content="website">
-<meta property="og:title" content="about">
-<meta property="og:url" content="http://yoursite.com/about/index.html">
+<meta name="description" content="通过BeanPostProcessor定制Bean&amp;#8194;&amp;#8194;&amp;#8194;&amp;#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。">
+<meta name="keywords" content="spring">
+<meta property="og:type" content="article">
+<meta property="og:title" content="容器扩展点">
+<meta property="og:url" content="http://yoursite.com/2017/08/14/spring-extendion/index.html">
 <meta property="og:site_name" content="总得留下点什么">
+<meta property="og:description" content="通过BeanPostProcessor定制Bean&amp;#8194;&amp;#8194;&amp;#8194;&amp;#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2017-08-09T09:25:57.000Z">
+<meta property="og:updated_time" content="2017-08-14T05:11:50.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="about">
+<meta name="twitter:title" content="容器扩展点">
+<meta name="twitter:description" content="通过BeanPostProcessor定制Bean&amp;#8194;&amp;#8194;&amp;#8194;&amp;#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。">
 
 
 
@@ -130,13 +134,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/about/"/>
+  <link rel="canonical" href="http://yoursite.com/2017/08/14/spring-extendion/"/>
 
 
 
 
 
-  <title>about | 总得留下点什么</title>
+  <title>容器扩展点 | 总得留下点什么</title>
   
 
 
@@ -261,33 +265,170 @@
 
   <div id="posts" class="posts-expand">
     
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/14/spring-extendion/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
     
-    
-    <div class="post-block page">
       <header class="post-header">
 
-	<h1 class="post-title" itemprop="name headline">about</h1>
-
-
-
-</header>
-
-      
-      
-      
-      <div class="post-body">
         
         
+          <h1 class="post-title" itemprop="name headline">容器扩展点</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-14T12:29:23+08:00">
+                2017-08-14
+              </time>
+            
+
+            
+
+            
+          </span>
+
           
-        
-      </div>
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/spring/" itemprop="url" rel="index">
+                    <span itemprop="name">spring</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
       
       
+
+      
+        <h1 id="通过BeanPostProcessor定制Bean"><a href="#通过BeanPostProcessor定制Bean" class="headerlink" title="通过BeanPostProcessor定制Bean"></a>通过BeanPostProcessor定制Bean</h1><p>&#8194;&#8194;&#8194;&#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。<br>&#8194;&#8194;&#8194;&#8194;可以配置多个BeanPostProcessor实例，通过设置order属性来控制这些BeanPostProcessors执行的顺序。</p>
+<blockquote>
+<p>BeanPostProcessor作用在一个bean(或者对象)的实例上;也就是说，Spring IoC实例化一个bean实例之后， BeanPostProcessor，才开始进行处理。 BeanPostProcessor作用范围是每一个容器。这仅仅和你正在使用容器有关。如果你在一个容器中定义了一个BeanPostProcessor ，它将仅仅后置处理那个容器中的beans。换言之，一个容器中的beans不会被另一个容器中的BeanPostProcessor处理，即使这两个容器，具有相同的父类。<br>&#8194;&#8194;&#8194;&#8194;ApplicationContext会自动地检测所有定义在配置元文件中，并实现了BeanPostProcessor接口的bean。该ApplicationContext注册这些beans作为后置处理器，使他们可以在bean创建完成之后被调用。bean后置处理器可以像其他bean一样部署到容器中。实现了BeanPostProcessor接口的类是特殊的,会被容器特殊处理。所有BeanPostProcessors和他们直接引用的 beans都会在容器启动的时候被实例化,作为ApplicationContext特殊启动阶段的一部分。</p>
+</blockquote>
+<h1 id="通过BeanFactoryPostProcessor定制Bean"><a href="#通过BeanFactoryPostProcessor定制Bean" class="headerlink" title="通过BeanFactoryPostProcessor定制Bean"></a>通过BeanFactoryPostProcessor定制Bean</h1><p>&#8194;&#8194;&#8194;&#8194;与BeanPostProcessor类似，但有一个主要的不同点：BeanFactoryPostProcessor操作bean的配置元数据；也就是说，Spring的IoC容器允许 BeanFactoryPostProcessor来读取配置元数据并在容器实例化任何bean(除了BeanFactoryPostProcessor)之前可以修改它。</p>
+
       
     </div>
     
     
     
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/spring/" rel="tag"># spring</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/08/11/spring-applicationContext/" rel="next" title="spring-applicationContext">
+                <i class="fa fa-chevron-left"></i> spring-applicationContext
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
   </div>
 
 
@@ -320,8 +461,17 @@
       
 
       
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
 
-      <section class="site-overview sidebar-panel sidebar-panel-active">
+      <section class="site-overview sidebar-panel">
         <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
           <img class="site-author-image" itemprop="image"
                src="/images/avatar.jpeg"
@@ -402,6 +552,22 @@
 
       </section>
 
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#通过BeanPostProcessor定制Bean"><span class="nav-number">1.</span> <span class="nav-text">通过BeanPostProcessor定制Bean</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#通过BeanFactoryPostProcessor定制Bean"><span class="nav-number">2.</span> <span class="nav-text">通过BeanFactoryPostProcessor定制Bean</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
       
 
       
@@ -528,10 +694,10 @@
 
 
   
-    <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.2"></script>
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.2"></script>
 <script type="text/javascript" src="/js/src/post-details.js?v=5.1.2"></script>
 
-  
+
 
   
 
