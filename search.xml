@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title><![CDATA[elasticsearch 基础]]></title>
+    <url>%2F2017%2F08%2F16%2Felasticsearch-basic%2F</url>
+    <content type="text"><![CDATA[elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。 shards 代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的： 1，增加高可用性。 2，提高性能。 replicas 代表索引副本，es可以设置多个索引的副本，副本的作用一是提高系统的容错性，当个某个节点某个分片损坏或丢失时可以从副本中恢复。二是提高es的查询效率，es会自动对搜索请求进行负载均衡。 recovery 代表数据恢复或叫数据重新分布，es在有节点加入或退出时会根据机器的负载对索引分片进行重新分配，挂掉的节点重新启动时也会进行数据恢复。 gateway 代表es索引的持久化存储方式，es默认是先把索引存放到内存中，当内存满了时再持久化到硬盘。当这个es集群关闭再重新启动时就会从gateway中读取索引数据。es支持多种类型的gateway，有本地文件系统（默认），分布式文件系统，Hadoop的HDFS和amazon的s3云存储服务。 index／type／document 索引，具有相同结构的文档集合。对应关系数据库的databases.类型，在索引中，可以定义一个或多个类型，类型是索引的逻辑分区。对应关系数据库的table。文档，真正存储的数据内容。对应关系数据库的一行记录。]]></content>
+      <categories>
+        <category>elasticsearch</category>
+      </categories>
+      <tags>
+        <tag>elasticsearch</tag>
+      </tags>
+  </entry>
+  <entry>
     <title><![CDATA[容器扩展点]]></title>
     <url>%2F2017%2F08%2F14%2Fspring-extendion%2F</url>
     <content type="text"><![CDATA[通过BeanPostProcessor定制Bean&#8194;&#8194;&#8194;&#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。&#8194;&#8194;&#8194;&#8194;可以配置多个BeanPostProcessor实例，通过设置order属性来控制这些BeanPostProcessors执行的顺序。 BeanPostProcessor作用在一个bean(或者对象)的实例上;也就是说，Spring IoC实例化一个bean实例之后， BeanPostProcessor，才开始进行处理。 BeanPostProcessor作用范围是每一个容器。这仅仅和你正在使用容器有关。如果你在一个容器中定义了一个BeanPostProcessor ，它将仅仅后置处理那个容器中的beans。换言之，一个容器中的beans不会被另一个容器中的BeanPostProcessor处理，即使这两个容器，具有相同的父类。&#8194;&#8194;&#8194;&#8194;ApplicationContext会自动地检测所有定义在配置元文件中，并实现了BeanPostProcessor接口的bean。该ApplicationContext注册这些beans作为后置处理器，使他们可以在bean创建完成之后被调用。bean后置处理器可以像其他bean一样部署到容器中。实现了BeanPostProcessor接口的类是特殊的,会被容器特殊处理。所有BeanPostProcessors和他们直接引用的 beans都会在容器启动的时候被实例化,作为ApplicationContext特殊启动阶段的一部分。 通过BeanFactoryPostProcessor定制Bean&#8194;&#8194;&#8194;&#8194;与BeanPostProcessor类似，但有一个主要的不同点：BeanFactoryPostProcessor操作bean的配置元数据；也就是说，Spring的IoC容器允许 BeanFactoryPostProcessor来读取配置元数据并在容器实例化任何bean(除了BeanFactoryPostProcessor)之前可以修改它。]]></content>
