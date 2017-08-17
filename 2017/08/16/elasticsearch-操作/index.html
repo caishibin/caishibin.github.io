@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+  
+  
+  
+  
+
+  
+    
+    
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    
+    
+    <link href="//fonts.googleapis.com/css?family=Lato:300,300italic,400,400italic,700,700italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+  
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.2" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="elasticsearch," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=5.1.2" />
+
+
+
+
+
+
+<meta name="description" content="基础操作创建索引123456789PUT host:port/&amp;#123;index&amp;#125;&amp;#123;  &amp;quot;settings&amp;quot; : &amp;#123;    &amp;quot;index&amp;quot; : &amp;#123;     &amp;quot;number_of_shards&amp;quot; : 3,     &amp;quot;number_of_replicas&amp;quot; : 1       &amp;">
+<meta name="keywords" content="elasticsearch">
+<meta property="og:type" content="article">
+<meta property="og:title" content="elasticsearch 操作">
+<meta property="og:url" content="http://yoursite.com/2017/08/16/elasticsearch-操作/index.html">
+<meta property="og:site_name" content="总得留下点什么">
+<meta property="og:description" content="基础操作创建索引123456789PUT host:port/&amp;#123;index&amp;#125;&amp;#123;  &amp;quot;settings&amp;quot; : &amp;#123;    &amp;quot;index&amp;quot; : &amp;#123;     &amp;quot;number_of_shards&amp;quot; : 3,     &amp;quot;number_of_replicas&amp;quot; : 1       &amp;">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2017-08-17T10:16:27.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="elasticsearch 操作">
+<meta name="twitter:description" content="基础操作创建索引123456789PUT host:port/&amp;#123;index&amp;#125;&amp;#123;  &amp;quot;settings&amp;quot; : &amp;#123;    &amp;quot;index&amp;quot; : &amp;#123;     &amp;quot;number_of_shards&amp;quot; : 3,     &amp;quot;number_of_replicas&amp;quot; : 1       &amp;">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    sidebar: {"position":"left","display":"post","offset":12,"offset_float":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: true,
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2017/08/16/elasticsearch-操作/"/>
+
+
+
+
+
+  <title>elasticsearch 操作 | 总得留下点什么</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">总得留下点什么</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">技术随笔</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/16/elasticsearch-操作/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">elasticsearch 操作</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-16T14:49:56+08:00">
+                2017-08-16
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="基础操作"><a href="#基础操作" class="headerlink" title="基础操作"></a>基础操作</h1><h3 id="创建索引"><a href="#创建索引" class="headerlink" title="创建索引"></a>创建索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;</div><div class="line">&#123;</div><div class="line">  &quot;settings&quot; : &#123;</div><div class="line">    &quot;index&quot; : &#123;</div><div class="line">     &quot;number_of_shards&quot; : 3,</div><div class="line">     &quot;number_of_replicas&quot; : 1</div><div class="line">       &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="更新索引配置"><a href="#更新索引配置" class="headerlink" title="更新索引配置"></a>更新索引配置</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_settings</div><div class="line">&#123;</div><div class="line">    &quot;index&quot; : &#123;</div><div class="line">     &quot;number_of_shards&quot; : 3,</div><div class="line">     &quot;number_of_replicas&quot; : 1</div><div class="line">       &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="删除索引"><a href="#删除索引" class="headerlink" title="删除索引"></a>删除索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">DELETE host:port/&#123;index&#125;</div></pre></td></tr></table></figure>
+<h3 id="重建索引"><a href="#重建索引" class="headerlink" title="重建索引"></a>重建索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">POST host:port/_reindex</div><div class="line">&#123;</div><div class="line">&quot;source&quot; : &#123;&quot;index&quot;:&quot;indexName&quot;&#125;,</div><div class="line">&quot;dest&quot; : &#123;&quot;index&quot;:&quot;new_indexName&quot;&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="创建索引类型映射"><a href="#创建索引类型映射" class="headerlink" title="创建索引类型映射"></a>创建索引类型映射</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;</div><div class="line">&#123;</div><div class="line">  &quot;properties&quot; : &#123;</div><div class="line">    &quot;name&quot; : &#123;</div><div class="line">     &quot;type&quot; : &quot;string&quot;</div><div class="line">       &#125;,</div><div class="line">    &quot;age&quot; : &#123;</div><div class="line">     &quot;type&quot; : &quot;integer&quot;</div><div class="line">       &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="获取索引类型字段映射"><a href="#获取索引类型字段映射" class="headerlink" title="获取索引类型字段映射"></a>获取索引类型字段映射</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;/&#123;field&#125;/text</div></pre></td></tr></table></figure>
+<h3 id="批量增加文档"><a href="#批量增加文档" class="headerlink" title="批量增加文档"></a>批量增加文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">POST host:port/&#123;index&#125;/&#123;type&#125;/_bulk</div><div class="line">    &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 1 &#125;&#125;</div><div class="line">    &#123; &quot;title&quot;: &quot;Elasticsearch: The Definitive Guide&quot;, &quot;authors&quot;: [&quot;clinton gormley&quot;, &quot;zachary tong&quot;], &quot;summary&quot; : &quot;A distibuted real-time search and analytics engine&quot;, &quot;publish_date&quot; : &quot;2015-02-07&quot;, &quot;num_reviews&quot;: 20, &quot;publisher&quot;: &quot;oreilly&quot; &#125;</div><div class="line">    &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 2 &#125;&#125;</div><div class="line">    &#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125;</div></pre></td></tr></table></figure>
+<h3 id="增加文档"><a href="#增加文档" class="headerlink" title="增加文档"></a>增加文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/&#123;type&#125;/&#123;id 可选&#125;</div><div class="line">&#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125;</div></pre></td></tr></table></figure>
+<h3 id="查询文档"><a href="#查询文档" class="headerlink" title="查询文档"></a>查询文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">GET host:port/&#123;index&#125;/&#123;type&#125;/&#123;id&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>可选参数<br>1，<em>{source}=false : 不返回某个字段。<br>2，</em>{source}<em>include,</em>{source}<em>exclude : 包含或过滤其中的某些字段。<br>3，</em>{source} : 只查询指定的某个字段。<br>4, _primary : 在主节点进行查询。<br>5, _local : 尽可能在本地节点进行查询。<br>6, refresh : 设置为true时，会在搜索操作前刷新相关的分片，保证可以及时的查询到结果。但会消耗系统的资源，除非有必要，正常情况不需要设置。<br>7, _mget : 多文档查询</p>
+</blockquote>
+<h3 id="通过Url参数搜索"><a href="#通过Url参数搜索" class="headerlink" title="通过Url参数搜索"></a>通过Url参数搜索</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">host:port/&#123;index&#125;/&#123;type&#125;/_search?&#123;参数&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>sort : 对指定字段进行排序，可以指定多个，按照书写顺序优先。<br>分页查询 ：可以通过from size组合来进行。from表示从第几行开始，size表示查询多少条文档。size的大小不能大于index.max_result_window这个参数的设置。数据量较大的时候，推荐使用scroll来查询。后续会进行分析对比。</p>
+</blockquote>
+<h1 id="查询DSL"><a href="#查询DSL" class="headerlink" title="查询DSL"></a>查询DSL</h1><h2 id="查询和过滤的区别"><a href="#查询和过滤的区别" class="headerlink" title="查询和过滤的区别"></a>查询和过滤的区别</h2><blockquote>
+<p>查询 ： 检查内容和条件是否匹配，计算_score元字段表示匹配度。<br>过滤 ： 不计算匹配得分，只是单纯的决定文档是否匹配。内容过滤主要用于过滤结构化的数据。</p>
+</blockquote>
+<h3 id="精确查找"><a href="#精确查找" class="headerlink" title="精确查找"></a>精确查找</h3><blockquote>
+<p>term : 可以用它处理数字（numbers）、布尔值（Booleans）、日期（dates）以及文本（text），term 查询会查找我们指定的精确值。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;term&quot; : &#123; </div><div class="line">                    &quot;price&quot; : 20</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>terms : 查询多个精确值</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;terms&quot; : &#123; </div><div class="line">                    &quot;price&quot; : [20, 30]</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p><font color="#DC143C" size="5">一定要了解 term 和 terms 是 包含（contains） 操作，而非 等值（equals)</font><br>&emsp;&emsp;如果我们有一个 term（词项）过滤器 { “term” : { “tags” : “search” } } ，它会与以下两个文档 同时 匹配：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">&#123; &quot;tags&quot; : [&quot;search&quot;] &#125;</div><div class="line">&#123; &quot;tags&quot; : [&quot;search&quot;, &quot;open_source&quot;] &#125;</div></pre></td></tr></table></figure></p>
+<p>可以通过对term增加tag_count参数来确保搜索结果的一致。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">GET /my_index/my_type/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                 &quot;bool&quot; : &#123;</div><div class="line">                    &quot;must&quot; : [</div><div class="line">                        &#123; &quot;term&quot; : &#123; &quot;tags&quot; : &quot;search&quot; &#125; &#125;, </div><div class="line">                        &#123; &quot;term&quot; : &#123; &quot;tag_count&quot; : 1 &#125; &#125; </div><div class="line">                    ]</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h3 id="constant-score-查询"><a href="#constant-score-查询" class="headerlink" title="constant_score 查询"></a>constant_score 查询</h3><blockquote>
+<p>A query that wraps another query and simply returns a constant score equal to the query boost for every document in the filter.(一个包含另一个查询的查询，只返回等于过滤器中每个文档的查询常数boost。)可以使用它来取代只有 filter 语句的 bool 查询。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot;&#125;</div><div class="line">            &#125;,</div><div class="line">            &quot;boost&quot; : 1.2</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="范围搜索"><a href="#范围搜索" class="headerlink" title="范围搜索"></a>范围搜索</h3><p>&emsp;&emsp;抛出一个问题，如何在es中实现以下sql的功能？<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">SELECT document</div><div class="line">FROM   products</div><div class="line">WHERE  price BETWEEN 20 AND 40</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>在es中，通过range查询提供包含（inclusive）和不包含（exclusive）这两种范围表达式，可供组合的选项如下：</p>
+<blockquote>
+<p>gt: &gt; 大于（greater than）<br>lt: &lt; 小于（less than）<br>gte: &gt;= 大于或等于（greater than or equal to）<br>lte: &lt;= 小于或等于（less than or equal to）</p>
+</blockquote>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;range&quot; : &#123;</div><div class="line">                    &quot;price&quot; : &#123;</div><div class="line">                        &quot;gte&quot; : 20,</div><div class="line">                        &quot;lt&quot;  : 40</div><div class="line">                    &#125;</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<hr>
+<hr>
+<h3 id="组合过滤器"><a href="#组合过滤器" class="headerlink" title="组合过滤器"></a>组合过滤器</h3><p>&emsp;&emsp;抛出个问题，怎样用 Elasticsearch 来表达下面的 SQL ？<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">SELECT product</div><div class="line">FROM   products</div><div class="line">WHERE  (price = 20 OR productID = &quot;XHDK-A-1293-#fJ3&quot;)</div><div class="line">AND  (price != 30)</div></pre></td></tr></table></figure></p>
+<h4 id="布尔过滤器"><a href="#布尔过滤器" class="headerlink" title="布尔过滤器"></a>布尔过滤器</h4><p>&emsp;&emsp;一个 bool 过滤器由三部分组成：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">   &quot;bool&quot; : &#123;</div><div class="line">      &quot;must&quot; :     [],  //与AND等价</div><div class="line">      &quot;should&quot; :   [],  //与OR等价</div><div class="line">      &quot;must_not&quot; : [],  //与NOT等价</div><div class="line">   &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h2 id="null处理"><a href="#null处理" class="headerlink" title="null处理"></a>null处理</h2><p>在Es中，null, []空数组 和 [null] 所有这些都是等价的，它们无法存于倒排索引中。</p>
+<h3 id="exists-存在查询"><a href="#exists-存在查询" class="headerlink" title="exists 存在查询"></a>exists 存在查询</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">GET /my_index/posts/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;exists&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">等价于</div><div class="line"></div><div class="line">SELECT tags</div><div class="line">FROM   posts</div><div class="line">WHERE  tags IS NOT NULL</div></pre></td></tr></table></figure>
+<h3 id="missing-缺失查询"><a href="#missing-缺失查询" class="headerlink" title="missing 缺失查询"></a>missing 缺失查询</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">GET /my_index/posts/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;missing&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">等价于</div><div class="line"></div><div class="line">SELECT tags</div><div class="line">FROM   posts</div><div class="line">WHERE  tags IS NULL</div></pre></td></tr></table></figure>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/elasticsearch/" rel="tag"># elasticsearch</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/08/16/elasticsearch-basic/" rel="next" title="elasticsearch 基础">
+                <i class="fa fa-chevron-left"></i> elasticsearch 基础
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/08/17/elasticsearch-分页搜索/" rel="prev" title="elasticsearch-分页搜索">
+                elasticsearch-分页搜索 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/avatar.jpeg"
+               alt="蔡世滨" />
+          <p class="site-author-name" itemprop="name">蔡世滨</p>
+           
+              <p class="site-description motion-element" itemprop="description"></p>
+          
+        </div>
+        <nav class="site-state motion-element">
+
+          
+            <div class="site-state-item site-state-posts">
+              <a href="/archives/">
+                <span class="site-state-item-count">7</span>
+                <span class="site-state-item-name">日志</span>
+              </a>
+            </div>
+          
+
+          
+            
+            
+            <div class="site-state-item site-state-categories">
+              <a href="/categories/index.html">
+                <span class="site-state-item-count">2</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            
+            
+            <div class="site-state-item site-state-tags">
+              <a href="/tags/index.html">
+                <span class="site-state-item-count">2</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/caishibin" target="_blank" title="GitHub">
+                  
+                    <i class="fa fa-fw fa-github"></i>
+                  
+                    
+                      GitHub
+                    
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+          <div class="cc-license motion-element" itemprop="license">
+            <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" target="_blank">
+              <img src="/images/cc-by-nc-sa.svg" alt="Creative Commons" />
+            </a>
+          </div>
+        
+
+        
+        
+
+        
+
+
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#基础操作"><span class="nav-number">1.</span> <span class="nav-text">基础操作</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#创建索引"><span class="nav-number">1.0.1.</span> <span class="nav-text">创建索引</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#更新索引配置"><span class="nav-number">1.0.2.</span> <span class="nav-text">更新索引配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#删除索引"><span class="nav-number">1.0.3.</span> <span class="nav-text">删除索引</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#重建索引"><span class="nav-number">1.0.4.</span> <span class="nav-text">重建索引</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#创建索引类型映射"><span class="nav-number">1.0.5.</span> <span class="nav-text">创建索引类型映射</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#获取索引类型字段映射"><span class="nav-number">1.0.6.</span> <span class="nav-text">获取索引类型字段映射</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#批量增加文档"><span class="nav-number">1.0.7.</span> <span class="nav-text">批量增加文档</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#增加文档"><span class="nav-number">1.0.8.</span> <span class="nav-text">增加文档</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查询文档"><span class="nav-number">1.0.9.</span> <span class="nav-text">查询文档</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#通过Url参数搜索"><span class="nav-number">1.0.10.</span> <span class="nav-text">通过Url参数搜索</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#查询DSL"><span class="nav-number">2.</span> <span class="nav-text">查询DSL</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#查询和过滤的区别"><span class="nav-number">2.1.</span> <span class="nav-text">查询和过滤的区别</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#精确查找"><span class="nav-number">2.1.1.</span> <span class="nav-text">精确查找</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#constant-score-查询"><span class="nav-number">2.1.2.</span> <span class="nav-text">constant_score 查询</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#范围搜索"><span class="nav-number">2.1.3.</span> <span class="nav-text">范围搜索</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#组合过滤器"><span class="nav-number">2.1.4.</span> <span class="nav-text">组合过滤器</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#布尔过滤器"><span class="nav-number">2.1.4.1.</span> <span class="nav-text">布尔过滤器</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#null处理"><span class="nav-number">2.2.</span> <span class="nav-text">null处理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#exists-存在查询"><span class="nav-number">2.2.1.</span> <span class="nav-text">exists 存在查询</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#missing-缺失查询"><span class="nav-number">2.2.2.</span> <span class="nav-text">missing 缺失查询</span></a></li></ol></li></ol></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy; 
+  <span itemprop="copyrightYear">2017</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">蔡世滨</span>
+</div>
+
+
+<div class="powered-by">
+  由 <a class="theme-link" href="https://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Gemini
+  </a>
+</div>
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  
+  <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  
+  <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.2"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.2"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.2"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.2"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.2"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.2"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.2"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

@@ -274,6 +274,349 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/17/elasticsearch-分页搜索/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2017/08/17/elasticsearch-分页搜索/" itemprop="url">elasticsearch-分页搜索</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-17T16:49:05+08:00">
+                2017-08-17
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="Elasticsearch–分页查询From-amp-Size-VS-scroll"><a href="#Elasticsearch–分页查询From-amp-Size-VS-scroll" class="headerlink" title="Elasticsearch–分页查询From&amp;Size VS scroll"></a>Elasticsearch–分页查询From&amp;Size VS scroll</h1><h3 id="按照一般的查询流程来说，如果我想查询前10条数据："><a href="#按照一般的查询流程来说，如果我想查询前10条数据：" class="headerlink" title="按照一般的查询流程来说，如果我想查询前10条数据："></a>按照一般的查询流程来说，如果我想查询前10条数据：</h3><p>1，客户端请求发给某个节点<br>2，节点转发给个个分片，查询每个分片上的前10条<br>3，结果返回给节点，整合数据，提取前10条<br>4，返回给请求客户端<br>那么当我想要查询第10条到第20条的数据该怎么办呢？这个时候就用到分页查询了。</p>
+<h2 id="from-size”浅”分页"><a href="#from-size”浅”分页" class="headerlink" title="from-size”浅”分页"></a>from-size”浅”分页</h2><p>它的原理很简单，就是查询前20条数据，然后截断前10条，只返回10-20的数据。这样其实白白浪费了前10条的查询。<br>查询的方法:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;from&quot; : 0, &quot;size&quot; : 10,</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot; &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<p>其中，from定义了目标数据的偏移值，size定义当前返回的事件数目。<br>默认from为0，size为10，即所有的查询默认仅仅返回前10条数据。</p>
+<p>做过测试，越往后的分页，执行的效率越低。<br>通过下图可以看出，刨去一些异常的数据，总体上还是会随着from的增加，消耗时间也会增加。而且数据量越大，效果越明显！</p>
+<hr>
+<p><img src="../images/fenye.png" alt=""></p>
+<h3 id="也就是说，分页的偏移值越大，执行分页查询时间就会越长！"><a href="#也就是说，分页的偏移值越大，执行分页查询时间就会越长！" class="headerlink" title="也就是说，分页的偏移值越大，执行分页查询时间就会越长！"></a><font color="#DC143C" size="5">也就是说，分页的偏移值越大，执行分页查询时间就会越长！</font></h3><h2 id="scroll”深”分页"><a href="#scroll”深”分页" class="headerlink" title="scroll”深”分页"></a>scroll”深”分页</h2><p>相对于from和size的分页来说，使用scroll可以模拟一个传统数据的游标，记录当前读取的文档信息位置。这个分页的用法，不是为了实时查询数据，而是为了一次性查询大量的数据（甚至是全部的数据）。</p>
+<p>因为这个scroll相当于维护了一份当前索引段的快照信息，这个快照信息是你执行这个scroll查询时的快照。在这个查询后的任何新索引进来的数据，都不会在这个快照中查询到。但是它相对于from和size，不是查询所有数据然后剔除不要的部分，而是记录一个读取的位置，保证下一次快速继续读取。<br>&ensp;&ensp;使用的方法：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">curl -XGET &apos;localhost:9200/twitter/tweet/_search?scroll=1m&apos; -d &apos;</div><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;match&quot; : &#123;</div><div class="line">            &quot;title&quot; : &quot;elasticsearch&quot;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line">&apos;</div></pre></td></tr></table></figure></p>
+<h2 id="测试from-amp-size-VS-scroll的性能"><a href="#测试from-amp-size-VS-scroll的性能" class="headerlink" title="测试from&amp;size VS scroll的性能"></a>测试from&amp;size VS scroll的性能</h2><p>初始化一个client对象：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">private static TransportClient client;</div><div class="line">    private static String INDEX = &quot;index_name&quot;;</div><div class="line">    private static String TYPE = &quot;type_name&quot;;</div><div class="line">    </div><div class="line">    public static TransportClient init()&#123;</div><div class="line">        Settings settings = ImmutableSettings.settingsBuilder()</div><div class="line">                 .put(&quot;client.transport.sniff&quot;, true)</div><div class="line">                 .put(&quot;cluster.name&quot;, &quot;cluster_name&quot;)</div><div class="line">                 .build();</div><div class="line">        client = new TransportClient(settings).addTransportAddress(new InetSocketTransportAddress(&quot;localhost&quot;,9300));</div><div class="line">        return client;</div><div class="line">    &#125;</div><div class="line">    public static void main(String[] args) &#123;</div><div class="line">        TransportClient client = init();</div><div class="line">        //这样就可以使用client执行查询了</div><div class="line">    &#125;</div></pre></td></tr></table></figure></p>
+<p>创建两个查询过程了 ，下面是from-size分页的执行代码：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">System.out.println(&quot;from size 模式启动！&quot;);</div><div class="line">Date begin = new Date();</div><div class="line">long count = client.prepareCount(INDEX).setTypes(TYPE).execute().actionGet().getCount();</div><div class="line">SearchRequestBuilder requestBuilder = client.prepareSearch(INDEX).setTypes(TYPE).setQuery(QueryBuilders.matchAllQuery());</div><div class="line">for(int i=0,sum=0; sum&lt;count; i++)&#123;</div><div class="line">    SearchResponse response = requestBuilder.setFrom(i).setSize(50000).execute().actionGet();</div><div class="line">    sum += response.getHits().hits().length;</div><div class="line">    System.out.println(&quot;总量&quot;+count+&quot; 已经查到&quot;+sum);</div><div class="line">&#125;</div><div class="line">Date end = new Date();</div><div class="line">System.out.println(&quot;耗时: &quot;+(end.getTime()-begin.getTime()));</div></pre></td></tr></table></figure></p>
+<p>下面是scroll分页的执行代码，注意啊！scroll里面的size是相对于每个分片来说的，所以实际返回的数量是：<font color="#DC143C" size="3">分片的数量 x size</font><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">System.out.println(&quot;scroll 模式启动！&quot;);</div><div class="line">begin = new Date();</div><div class="line">SearchResponse scrollResponse = client.prepareSearch(INDEX)</div><div class="line">    .setSearchType(SearchType.SCAN).setSize(10000).setScroll(TimeValue.timeValueMinutes(1)) </div><div class="line">    .execute().actionGet();  </div><div class="line">count = scrollResponse.getHits().getTotalHits();//第一次不返回数据</div><div class="line">for(int i=0,sum=0; sum&lt;count; i++)&#123;</div><div class="line">    scrollResponse = client.prepareSearchScroll(scrollResponse.getScrollId())  </div><div class="line">        .setScroll(TimeValue.timeValueMinutes(8))  </div><div class="line">    .execute().actionGet();</div><div class="line">    sum += scrollResponse.getHits().hits().length;</div><div class="line">    System.out.println(&quot;总量&quot;+count+&quot; 已经查到&quot;+sum);</div><div class="line">&#125;</div><div class="line">end = new Date();</div><div class="line">System.out.println(&quot;耗时: &quot;+(end.getTime()-begin.getTime()));</div></pre></td></tr></table></figure></p>
+<hr>
+<p><img src="../images/对比.png" alt=""></p>
+<font color="#DC143C" size="4">可以看到仅仅30万，就相差接近一倍的性能，更何况是如今的大数据环境…因此，如果想要对全量数据进行操作，快换掉fromsize,使用scroll吧！</font>
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/16/elasticsearch-操作/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2017/08/16/elasticsearch-操作/" itemprop="url">elasticsearch 操作</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-16T14:49:56+08:00">
+                2017-08-16
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="基础操作"><a href="#基础操作" class="headerlink" title="基础操作"></a>基础操作</h1><h3 id="创建索引"><a href="#创建索引" class="headerlink" title="创建索引"></a>创建索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;</div><div class="line">&#123;</div><div class="line">  &quot;settings&quot; : &#123;</div><div class="line">    &quot;index&quot; : &#123;</div><div class="line">     &quot;number_of_shards&quot; : 3,</div><div class="line">     &quot;number_of_replicas&quot; : 1</div><div class="line">       &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="更新索引配置"><a href="#更新索引配置" class="headerlink" title="更新索引配置"></a>更新索引配置</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_settings</div><div class="line">&#123;</div><div class="line">    &quot;index&quot; : &#123;</div><div class="line">     &quot;number_of_shards&quot; : 3,</div><div class="line">     &quot;number_of_replicas&quot; : 1</div><div class="line">       &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="删除索引"><a href="#删除索引" class="headerlink" title="删除索引"></a>删除索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">DELETE host:port/&#123;index&#125;</div></pre></td></tr></table></figure>
+<h3 id="重建索引"><a href="#重建索引" class="headerlink" title="重建索引"></a>重建索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">POST host:port/_reindex</div><div class="line">&#123;</div><div class="line">&quot;source&quot; : &#123;&quot;index&quot;:&quot;indexName&quot;&#125;,</div><div class="line">&quot;dest&quot; : &#123;&quot;index&quot;:&quot;new_indexName&quot;&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="创建索引类型映射"><a href="#创建索引类型映射" class="headerlink" title="创建索引类型映射"></a>创建索引类型映射</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;</div><div class="line">&#123;</div><div class="line">  &quot;properties&quot; : &#123;</div><div class="line">    &quot;name&quot; : &#123;</div><div class="line">     &quot;type&quot; : &quot;string&quot;</div><div class="line">       &#125;,</div><div class="line">    &quot;age&quot; : &#123;</div><div class="line">     &quot;type&quot; : &quot;integer&quot;</div><div class="line">       &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="获取索引类型字段映射"><a href="#获取索引类型字段映射" class="headerlink" title="获取索引类型字段映射"></a>获取索引类型字段映射</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;/&#123;field&#125;/text</div></pre></td></tr></table></figure>
+<h3 id="批量增加文档"><a href="#批量增加文档" class="headerlink" title="批量增加文档"></a>批量增加文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">POST host:port/&#123;index&#125;/&#123;type&#125;/_bulk</div><div class="line">    &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 1 &#125;&#125;</div><div class="line">    &#123; &quot;title&quot;: &quot;Elasticsearch: The Definitive Guide&quot;, &quot;authors&quot;: [&quot;clinton gormley&quot;, &quot;zachary tong&quot;], &quot;summary&quot; : &quot;A distibuted real-time search and analytics engine&quot;, &quot;publish_date&quot; : &quot;2015-02-07&quot;, &quot;num_reviews&quot;: 20, &quot;publisher&quot;: &quot;oreilly&quot; &#125;</div><div class="line">    &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 2 &#125;&#125;</div><div class="line">    &#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125;</div></pre></td></tr></table></figure>
+<h3 id="增加文档"><a href="#增加文档" class="headerlink" title="增加文档"></a>增加文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/&#123;type&#125;/&#123;id 可选&#125;</div><div class="line">&#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125;</div></pre></td></tr></table></figure>
+<h3 id="查询文档"><a href="#查询文档" class="headerlink" title="查询文档"></a>查询文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">GET host:port/&#123;index&#125;/&#123;type&#125;/&#123;id&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>可选参数<br>1，<em>{source}=false : 不返回某个字段。<br>2，</em>{source}<em>include,</em>{source}<em>exclude : 包含或过滤其中的某些字段。<br>3，</em>{source} : 只查询指定的某个字段。<br>4, _primary : 在主节点进行查询。<br>5, _local : 尽可能在本地节点进行查询。<br>6, refresh : 设置为true时，会在搜索操作前刷新相关的分片，保证可以及时的查询到结果。但会消耗系统的资源，除非有必要，正常情况不需要设置。<br>7, _mget : 多文档查询</p>
+</blockquote>
+<h3 id="通过Url参数搜索"><a href="#通过Url参数搜索" class="headerlink" title="通过Url参数搜索"></a>通过Url参数搜索</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">host:port/&#123;index&#125;/&#123;type&#125;/_search?&#123;参数&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>sort : 对指定字段进行排序，可以指定多个，按照书写顺序优先。<br>分页查询 ：可以通过from size组合来进行。from表示从第几行开始，size表示查询多少条文档。size的大小不能大于index.max_result_window这个参数的设置。数据量较大的时候，推荐使用scroll来查询。后续会进行分析对比。</p>
+</blockquote>
+<h1 id="查询DSL"><a href="#查询DSL" class="headerlink" title="查询DSL"></a>查询DSL</h1><h2 id="查询和过滤的区别"><a href="#查询和过滤的区别" class="headerlink" title="查询和过滤的区别"></a>查询和过滤的区别</h2><blockquote>
+<p>查询 ： 检查内容和条件是否匹配，计算_score元字段表示匹配度。<br>过滤 ： 不计算匹配得分，只是单纯的决定文档是否匹配。内容过滤主要用于过滤结构化的数据。</p>
+</blockquote>
+<h3 id="精确查找"><a href="#精确查找" class="headerlink" title="精确查找"></a>精确查找</h3><blockquote>
+<p>term : 可以用它处理数字（numbers）、布尔值（Booleans）、日期（dates）以及文本（text），term 查询会查找我们指定的精确值。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;term&quot; : &#123; </div><div class="line">                    &quot;price&quot; : 20</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>terms : 查询多个精确值</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;terms&quot; : &#123; </div><div class="line">                    &quot;price&quot; : [20, 30]</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p><font color="#DC143C" size="5">一定要了解 term 和 terms 是 包含（contains） 操作，而非 等值（equals)</font><br>&emsp;&emsp;如果我们有一个 term（词项）过滤器 { “term” : { “tags” : “search” } } ，它会与以下两个文档 同时 匹配：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">&#123; &quot;tags&quot; : [&quot;search&quot;] &#125;</div><div class="line">&#123; &quot;tags&quot; : [&quot;search&quot;, &quot;open_source&quot;] &#125;</div></pre></td></tr></table></figure></p>
+<p>可以通过对term增加tag_count参数来确保搜索结果的一致。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">GET /my_index/my_type/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                 &quot;bool&quot; : &#123;</div><div class="line">                    &quot;must&quot; : [</div><div class="line">                        &#123; &quot;term&quot; : &#123; &quot;tags&quot; : &quot;search&quot; &#125; &#125;, </div><div class="line">                        &#123; &quot;term&quot; : &#123; &quot;tag_count&quot; : 1 &#125; &#125; </div><div class="line">                    ]</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h3 id="constant-score-查询"><a href="#constant-score-查询" class="headerlink" title="constant_score 查询"></a>constant_score 查询</h3><blockquote>
+<p>A query that wraps another query and simply returns a constant score equal to the query boost for every document in the filter.(一个包含另一个查询的查询，只返回等于过滤器中每个文档的查询常数boost。)可以使用它来取代只有 filter 语句的 bool 查询。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot;&#125;</div><div class="line">            &#125;,</div><div class="line">            &quot;boost&quot; : 1.2</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="范围搜索"><a href="#范围搜索" class="headerlink" title="范围搜索"></a>范围搜索</h3><p>&emsp;&emsp;抛出一个问题，如何在es中实现以下sql的功能？<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">SELECT document</div><div class="line">FROM   products</div><div class="line">WHERE  price BETWEEN 20 AND 40</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>在es中，通过range查询提供包含（inclusive）和不包含（exclusive）这两种范围表达式，可供组合的选项如下：</p>
+<blockquote>
+<p>gt: &gt; 大于（greater than）<br>lt: &lt; 小于（less than）<br>gte: &gt;= 大于或等于（greater than or equal to）<br>lte: &lt;= 小于或等于（less than or equal to）</p>
+</blockquote>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;range&quot; : &#123;</div><div class="line">                    &quot;price&quot; : &#123;</div><div class="line">                        &quot;gte&quot; : 20,</div><div class="line">                        &quot;lt&quot;  : 40</div><div class="line">                    &#125;</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<hr>
+<hr>
+<h3 id="组合过滤器"><a href="#组合过滤器" class="headerlink" title="组合过滤器"></a>组合过滤器</h3><p>&emsp;&emsp;抛出个问题，怎样用 Elasticsearch 来表达下面的 SQL ？<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">SELECT product</div><div class="line">FROM   products</div><div class="line">WHERE  (price = 20 OR productID = &quot;XHDK-A-1293-#fJ3&quot;)</div><div class="line">AND  (price != 30)</div></pre></td></tr></table></figure></p>
+<h4 id="布尔过滤器"><a href="#布尔过滤器" class="headerlink" title="布尔过滤器"></a>布尔过滤器</h4><p>&emsp;&emsp;一个 bool 过滤器由三部分组成：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">   &quot;bool&quot; : &#123;</div><div class="line">      &quot;must&quot; :     [],  //与AND等价</div><div class="line">      &quot;should&quot; :   [],  //与OR等价</div><div class="line">      &quot;must_not&quot; : [],  //与NOT等价</div><div class="line">   &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h2 id="null处理"><a href="#null处理" class="headerlink" title="null处理"></a>null处理</h2><p>在Es中，null, []空数组 和 [null] 所有这些都是等价的，它们无法存于倒排索引中。</p>
+<h3 id="exists-存在查询"><a href="#exists-存在查询" class="headerlink" title="exists 存在查询"></a>exists 存在查询</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">GET /my_index/posts/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;exists&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">等价于</div><div class="line"></div><div class="line">SELECT tags</div><div class="line">FROM   posts</div><div class="line">WHERE  tags IS NOT NULL</div></pre></td></tr></table></figure>
+<h3 id="missing-缺失查询"><a href="#missing-缺失查询" class="headerlink" title="missing 缺失查询"></a>missing 缺失查询</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">GET /my_index/posts/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;missing&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">等价于</div><div class="line"></div><div class="line">SELECT tags</div><div class="line">FROM   posts</div><div class="line">WHERE  tags IS NULL</div></pre></td></tr></table></figure>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/16/elasticsearch-basic/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -369,6 +712,9 @@
           
             <h1 id="elasticsearch几个重要的概念"><a href="#elasticsearch几个重要的概念" class="headerlink" title="elasticsearch几个重要的概念"></a>elasticsearch几个重要的概念</h1><h3 id="cluster"><a href="#cluster" class="headerlink" title="cluster"></a>cluster</h3><blockquote>
 <p>代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。</p>
+</blockquote>
+<h3 id="node"><a href="#node" class="headerlink" title="node"></a>node</h3><blockquote>
+<p>组成集群的每一个服务器称之为节点。</p>
 </blockquote>
 <h3 id="shards"><a href="#shards" class="headerlink" title="shards"></a>shards</h3><blockquote>
 <p>代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。<br>分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的：<br>    1，增加高可用性。<br>    2，提高性能。</p>
@@ -1105,7 +1451,7 @@
           
             <div class="site-state-item site-state-posts">
               <a href="/archives/">
-                <span class="site-state-item-count">5</span>
+                <span class="site-state-item-count">7</span>
                 <span class="site-state-item-name">日志</span>
               </a>
             </div>

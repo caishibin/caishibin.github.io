@@ -94,18 +94,18 @@
 
 
 
-<meta name="description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  shards 代表索引分片，es可以把一个完整的索引分">
+<meta name="description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
 <meta name="keywords" content="elasticsearch">
 <meta property="og:type" content="article">
 <meta property="og:title" content="elasticsearch 基础">
 <meta property="og:url" content="http://yoursite.com/2017/08/16/elasticsearch-basic/index.html">
 <meta property="og:site_name" content="总得留下点什么">
-<meta property="og:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  shards 代表索引分片，es可以把一个完整的索引分">
+<meta property="og:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2017-08-16T04:03:50.000Z">
+<meta property="og:updated_time" content="2017-08-16T06:16:04.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="elasticsearch 基础">
-<meta name="twitter:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  shards 代表索引分片，es可以把一个完整的索引分">
+<meta name="twitter:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
 
 
 
@@ -369,6 +369,9 @@
         <h1 id="elasticsearch几个重要的概念"><a href="#elasticsearch几个重要的概念" class="headerlink" title="elasticsearch几个重要的概念"></a>elasticsearch几个重要的概念</h1><h3 id="cluster"><a href="#cluster" class="headerlink" title="cluster"></a>cluster</h3><blockquote>
 <p>代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。</p>
 </blockquote>
+<h3 id="node"><a href="#node" class="headerlink" title="node"></a>node</h3><blockquote>
+<p>组成集群的每一个服务器称之为节点。</p>
+</blockquote>
 <h3 id="shards"><a href="#shards" class="headerlink" title="shards"></a>shards</h3><blockquote>
 <p>代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。<br>分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的：<br>    1，增加高可用性。<br>    2，提高性能。</p>
 </blockquote>
@@ -423,6 +426,10 @@
           <span class="post-nav-divider"></span>
 
           <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2017/08/16/elasticsearch-操作/" rel="prev" title="elasticsearch 操作">
+                elasticsearch 操作 <i class="fa fa-chevron-right"></i>
+              </a>
             
           </div>
         </div>
@@ -499,7 +506,7 @@
           
             <div class="site-state-item site-state-posts">
               <a href="/archives/">
-                <span class="site-state-item-count">5</span>
+                <span class="site-state-item-count">7</span>
                 <span class="site-state-item-name">日志</span>
               </a>
             </div>
@@ -575,7 +582,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#elasticsearch几个重要的概念"><span class="nav-number">1.</span> <span class="nav-text">elasticsearch几个重要的概念</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#cluster"><span class="nav-number">1.0.1.</span> <span class="nav-text">cluster</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#shards"><span class="nav-number">1.0.2.</span> <span class="nav-text">shards</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#replicas"><span class="nav-number">1.0.3.</span> <span class="nav-text">replicas</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#recovery"><span class="nav-number">1.0.4.</span> <span class="nav-text">recovery</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#gateway"><span class="nav-number">1.0.5.</span> <span class="nav-text">gateway</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#index／type／document"><span class="nav-number">1.0.6.</span> <span class="nav-text">index／type／document</span></a></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#elasticsearch几个重要的概念"><span class="nav-number">1.</span> <span class="nav-text">elasticsearch几个重要的概念</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#cluster"><span class="nav-number">1.0.1.</span> <span class="nav-text">cluster</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#node"><span class="nav-number">1.0.2.</span> <span class="nav-text">node</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#shards"><span class="nav-number">1.0.3.</span> <span class="nav-text">shards</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#replicas"><span class="nav-number">1.0.4.</span> <span class="nav-text">replicas</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#recovery"><span class="nav-number">1.0.5.</span> <span class="nav-text">recovery</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#gateway"><span class="nav-number">1.0.6.</span> <span class="nav-text">gateway</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#index／type／document"><span class="nav-number">1.0.7.</span> <span class="nav-text">index／type／document</span></a></li></ol></li></ol></li></ol></div>
             
 
           </div>
