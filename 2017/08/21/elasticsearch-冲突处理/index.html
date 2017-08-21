@@ -78,7 +78,7 @@
 <link href="/css/main.css?v=5.1.2" rel="stylesheet" type="text/css" />
 
 
-  <meta name="keywords" content="spring," />
+  <meta name="keywords" content="elasticsearch," />
 
 
 
@@ -94,18 +94,20 @@
 
 
 
-<meta name="description" content="常用的Bean相关的注解@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。@PostConstruct、@">
-<meta name="keywords" content="spring">
+<meta name="description" content="ES冲突处理和版本控制&amp;ensp;&amp;ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似：   web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我">
+<meta name="keywords" content="elasticsearch">
 <meta property="og:type" content="article">
-<meta property="og:title" content="spring annotation">
-<meta property="og:url" content="http://yoursite.com/2017/08/11/spring-annotation/index.html">
+<meta property="og:title" content="elasticsearch-冲突处理">
+<meta property="og:url" content="http://yoursite.com/2017/08/21/elasticsearch-冲突处理/index.html">
 <meta property="og:site_name" content="总得留下点什么">
-<meta property="og:description" content="常用的Bean相关的注解@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。@PostConstruct、@">
+<meta property="og:description" content="ES冲突处理和版本控制&amp;ensp;&amp;ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似：   web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2017-08-11T03:38:53.000Z">
+<meta property="og:image" content="http://yoursite.com/2017/08/21/images/elas_0301.png">
+<meta property="og:updated_time" content="2017-08-21T08:07:59.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="spring annotation">
-<meta name="twitter:description" content="常用的Bean相关的注解@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。@PostConstruct、@">
+<meta name="twitter:title" content="elasticsearch-冲突处理">
+<meta name="twitter:description" content="ES冲突处理和版本控制&amp;ensp;&amp;ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似：   web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我">
+<meta name="twitter:image" content="http://yoursite.com/2017/08/21/images/elas_0301.png">
 
 
 
@@ -134,13 +136,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2017/08/11/spring-annotation/"/>
+  <link rel="canonical" href="http://yoursite.com/2017/08/21/elasticsearch-冲突处理/"/>
 
 
 
 
 
-  <title>spring annotation | 总得留下点什么</title>
+  <title>elasticsearch-冲突处理 | 总得留下点什么</title>
   
 
 
@@ -277,7 +279,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/11/spring-annotation/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/21/elasticsearch-冲突处理/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="蔡世滨">
@@ -294,7 +296,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">spring annotation</h1>
+          <h1 class="post-title" itemprop="name headline">elasticsearch-冲突处理</h1>
         
 
         <div class="post-meta">
@@ -306,8 +308,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-11T10:47:16+08:00">
-                2017-08-11
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-21T15:56:30+08:00">
+                2017-08-21
               </time>
             
 
@@ -329,8 +331,8 @@
               
               
                 <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/spring/" itemprop="url" rel="index">
-                    <span itemprop="name">spring</span>
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
                   </a>
                 </span>
 
@@ -366,23 +368,20 @@
       
 
       
-        <h1 id="常用的Bean相关的注解"><a href="#常用的Bean相关的注解" class="headerlink" title="常用的Bean相关的注解"></a>常用的Bean相关的注解</h1><h3 id="Repository、-Service、-Controller-和-Component-—-将类标识为Bean，由spring容器管理。通过上述注解标识的-Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注-Bean-的同时能够指定-Bean-的作用域，引入了-Scope-注解。使用该注解时只需提供作用域的名称。"><a href="#Repository、-Service、-Controller-和-Component-—-将类标识为Bean，由spring容器管理。通过上述注解标识的-Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注-Bean-的同时能够指定-Bean-的作用域，引入了-Scope-注解。使用该注解时只需提供作用域的名称。" class="headerlink" title="@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。"></a>@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。</h3><h3 id="PostConstruct、-PreDestroy-—-指定生命周期回调方法，分别对应init-method-和-destroy-method-属性。"><a href="#PostConstruct、-PreDestroy-—-指定生命周期回调方法，分别对应init-method-和-destroy-method-属性。" class="headerlink" title="@PostConstruct、@PreDestroy — 指定生命周期回调方法，分别对应init-method 和 destroy-method 属性。"></a>@PostConstruct、@PreDestroy — 指定生命周期回调方法，分别对应init-method 和 destroy-method 属性。</h3><h3 id="Required-—-对bean的依赖进行检查。"><a href="#Required-—-对bean的依赖进行检查。" class="headerlink" title="@Required — 对bean的依赖进行检查。"></a>@Required — 对bean的依赖进行检查。</h3><p><bean> 标签提供了 dependency-check 属性用于进行依赖检查。该属性的取值包括以下几种：</bean></p>
-<ul>
-<li>none – 默认不执行依赖检查。可以在 <beans> 标签上使用 * default-dependency-check 属性改变默认值。</beans></li>
-<li>simple – 对原始基本类型和集合类型进行检查。</li>
-<li>objects – 对复杂类型进行检查（除了 simple 所检查类型之外的其他类型）。</li>
-<li>all – 对所有类型进行检查。</li>
-</ul>
-<h3 id="Resource、-Autowired-—-Bean的自动装配策略。"><a href="#Resource、-Autowired-—-Bean的自动装配策略。" class="headerlink" title="@Resource、@Autowired — Bean的自动装配策略。"></a>@Resource、@Autowired — Bean的自动装配策略。</h3><ul>
-<li>no – 显式指定不使用自动装配。</li>
-<li>byName – 如果存在一个和当前属性名字一致的 Bean，则使用该 Bean 进行注入。如果名称匹配但是类型不匹配，则抛出异常。如果没有匹配的类型，则什么也不做。</li>
-<li>byType – 如果存在一个和当前属性类型一致的 Bean ( 相同类型或者子类型 )，则使用该 Bean 进行注入。byType 能够识别工厂方法，即能够识别 factory-method 的返回类型。如果存在多个类型一致的 Bean，则抛出异常。如果没有匹配的类型，则什么也不做。</li>
-<li>constructor – 与 byType 类似，只不过它是针对构造函数注入而言的。如果当前没有与构造函数的参数类型匹配的 Bean，则抛出异常。使用该种装配模式时，优先匹配参数最多的构造函数。</li>
-<li>autodetect – 根据 Bean 的自省机制决定采用 byType 还是 constructor 进行自动装配。如果 Bean 提供了默认的构造函数，则采用 byType；否则采用 constructor 进行自动装配。<h4 id="两者的区别"><a href="#两者的区别" class="headerlink" title="两者的区别"></a>两者的区别</h4><blockquote>
-<p>@Autowired and @Inject<br>1, Matches by Type<br>2, Restricts by Qualifiers<br>3, Matches by Name<br>@Resource<br>1, Matches by Name<br>2, Matches by Type<br>3, Restricts by Qualifiers (ignored if match is found by name)<br>‘@Autowired’ 和‘@Inject’的报错信息完全相同，他们都是通过 ‘AutowiredAnnotationBeanPostProcessor’ 类实现的依赖注入，二者具有可互换性。<br>‘@Resource’通过 ‘CommonAnnotationBeanPostProcessor’ 类实现依赖注入</p>
+        <h1 id="ES冲突处理和版本控制"><a href="#ES冲突处理和版本控制" class="headerlink" title="ES冲突处理和版本控制"></a>ES冲突处理和版本控制</h1><p>&ensp;&ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似：</p>
+<p><img src="../images/elas_0301.png" alt=""></p>
+<blockquote>
+<p>web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我们会认为有超过商品的实际数量的库存，因为卖给顾客的库存商品并不存在，我们将让他们非常失望。</p>
 </blockquote>
-</li>
-</ul>
+<p>&ensp;&ensp;变更越频繁，读数据和更新数据的间隙越长，也就越可能丢失变更。<br>&ensp;&ensp;在数据库领域中，有两种方法通常被用来确保并发更新时变更不会丢失：</p>
+<blockquote>
+<p>悲观并发控制<br>&ensp;&ensp;这种方法被关系型数据库广泛使用，它假定有变更冲突可能发生，因此阻塞访问资源以防止冲突。 一个典型的例子是读取一行数据之前先将其锁住，确保只有放置锁的线程能够对这行数据进行修改。<br>乐观并发控制<br>&ensp;&ensp;Elasticsearch 中使用的这种方法假定冲突是不可能发生的，并且不会阻塞正在尝试的操作。 然而，如果源数据在读写当中被修改，更新将会失败。应用程序接下来将决定该如何解决冲突。 例如，可以重试更新、使用新的数据、或者将相关情况报告给用户。</p>
+</blockquote>
+<h2 id="乐观并发控制-–-通过version控制"><a href="#乐观并发控制-–-通过version控制" class="headerlink" title="乐观并发控制 – 通过version控制"></a>乐观并发控制 – 通过version控制</h2><p>Elasticsearch 是分布式的。当文档创建、更新或删除时， 新版本的文档必须复制到集群中的其他节点。Elasticsearch 也是异步和并发的，这意味着这些复制请求被并行发送，并且到达目的地时也许 顺序是乱的 。 Elasticsearch 需要一种方法确保文档的旧版本不会覆盖新的版本。</p>
+<font size="4" color="#DC143C">每个文档都有一个 _version （版本）号，当文档被修改时版本号递增。 Elasticsearch 使用这个 _version 号来确保变更以正确顺序得到执行。如果旧版本的文档在新版本之后到达，它可以被简单的忽略。</font>
+
+<p>当我们尝试通过重建文档的索引来保存修改，我们指定 version 为我们的修改会被应用的版本：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">PUT /website/blog/1?version=1 </div><div class="line">&#123;</div><div class="line">  &quot;title&quot;: &quot;My first blog entry&quot;,</div><div class="line">  &quot;text&quot;:  &quot;Starting to get the hang of this...&quot;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<p><font size="4" color="#DC143C">然而，如果我们重新运行相同的索引请求，仍然指定 version=1 ， Elasticsearch 返回 409 Conflict HTTP 响应码</font><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">   &quot;error&quot;: &#123;</div><div class="line">      &quot;root_cause&quot;: [</div><div class="line">         &#123;</div><div class="line">            &quot;type&quot;: &quot;version_conflict_engine_exception&quot;,</div><div class="line">            &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;,</div><div class="line">            &quot;index&quot;: &quot;website&quot;,</div><div class="line">            &quot;shard&quot;: &quot;3&quot;</div><div class="line">         &#125;</div><div class="line">      ],</div><div class="line">      &quot;type&quot;: &quot;version_conflict_engine_exception&quot;,</div><div class="line">      &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;,</div><div class="line">      &quot;index&quot;: &quot;website&quot;,</div><div class="line">      &quot;shard&quot;: &quot;3&quot;</div><div class="line">   &#125;,</div><div class="line">   &quot;status&quot;: 409</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
 
       
     </div>
@@ -400,7 +399,7 @@
       
         <div class="post-tags">
           
-            <a href="/tags/spring/" rel="tag"># spring</a>
+            <a href="/tags/elasticsearch/" rel="tag"># elasticsearch</a>
           
         </div>
       
@@ -413,8 +412,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2017/08/10/spring/" rel="next" title="spring bean 加载流程">
-                <i class="fa fa-chevron-left"></i> spring bean 加载流程
+              <a href="/2017/08/17/elasticsearch-分页搜索/" rel="next" title="elasticsearch-分页搜索">
+                <i class="fa fa-chevron-left"></i> elasticsearch-分页搜索
               </a>
             
           </div>
@@ -423,8 +422,8 @@
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2017/08/11/spring-applicationContext/" rel="prev" title="spring-applicationContext">
-                spring-applicationContext <i class="fa fa-chevron-right"></i>
+              <a href="/2017/08/21/elasticsearch-路由和分片/" rel="prev" title="elasticsearch-路由和分片">
+                elasticsearch-路由和分片 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>
@@ -578,7 +577,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#常用的Bean相关的注解"><span class="nav-number">1.</span> <span class="nav-text">常用的Bean相关的注解</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Repository、-Service、-Controller-和-Component-—-将类标识为Bean，由spring容器管理。通过上述注解标识的-Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注-Bean-的同时能够指定-Bean-的作用域，引入了-Scope-注解。使用该注解时只需提供作用域的名称。"><span class="nav-number">1.0.1.</span> <span class="nav-text">@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#PostConstruct、-PreDestroy-—-指定生命周期回调方法，分别对应init-method-和-destroy-method-属性。"><span class="nav-number">1.0.2.</span> <span class="nav-text">@PostConstruct、@PreDestroy — 指定生命周期回调方法，分别对应init-method 和 destroy-method 属性。</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Required-—-对bean的依赖进行检查。"><span class="nav-number">1.0.3.</span> <span class="nav-text">@Required — 对bean的依赖进行检查。</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Resource、-Autowired-—-Bean的自动装配策略。"><span class="nav-number">1.0.4.</span> <span class="nav-text">@Resource、@Autowired — Bean的自动装配策略。</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#两者的区别"><span class="nav-number">1.0.4.1.</span> <span class="nav-text">两者的区别</span></a></li></ol></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#ES冲突处理和版本控制"><span class="nav-number">1.</span> <span class="nav-text">ES冲突处理和版本控制</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#乐观并发控制-–-通过version控制"><span class="nav-number">1.1.</span> <span class="nav-text">乐观并发控制 – 通过version控制</span></a></li></ol></li></ol></div>
             
 
           </div>

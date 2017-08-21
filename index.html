@@ -274,6 +274,328 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/21/elasticsearch-路由和分片/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2017/08/21/elasticsearch-路由和分片/" itemprop="url">elasticsearch-路由和分片</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-21T16:32:31+08:00">
+                2017-08-21
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="路由一个文档到分片中"><a href="#路由一个文档到分片中" class="headerlink" title="路由一个文档到分片中"></a>路由一个文档到分片中</h1><p>当索引一个文档的时候，文档会被存储到一个主分片中。Elasticsearch 如何知道一个文档应该存放到哪个分片中呢？<br>给出一个公式：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">shard = hash(routing) % number_of_primary_shards</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>routing 是一个可变值，默认是文档的 _id ，也可以设置成一个自定义的值。 routing 通过 hash 函数生成一个数字，然后这个数字再除以 number_of_primary_shards （主分片的数量）后得到 余数 。这个分布在 0 到 number_of_primary_shards-1 之间的余数，就是我们所寻求的文档所在分片的位置。</p>
+</blockquote>
+<h2 id="主分片和副分片如何交互"><a href="#主分片和副分片如何交互" class="headerlink" title="主分片和副分片如何交互"></a>主分片和副分片如何交互</h2><p>假设有一个集群由三个节点组成。 它包含一个叫 blogs 的索引，有两个主分片，每个主分片有两个副本分片。相同分片的副本不会放在同一节点，则集群中分片的情况如下图所示：</p>
+<p><img src="../images/elas_0401.png" alt=""></p>
+<blockquote>
+<p>请求可以发送到集群中的任一节点。每个节点都有能力处理任意请求，每个节点都知道集群中任意文档的位置。所以都可以将请求转发到需要的节点上。</p>
+</blockquote>
+<p>新建、索引和删除 请求都是 写 操作， 必须在主分片上面完成之后才能被复制到相关的副本分片<br><img src="../images/elas_0402.png" alt=""><br>以下是一个索引的过程：</p>
+<blockquote>
+<p>1, 客户端向 Node 1 发送新建、索引或者删除请求。<br>  2, 节点使用文档的 _id 确定文档属于分片 0 。请求会被转发到 Node 3<code>，因为分片 0 的主分片目前被分配在</code>Node 3 上。<br>  3, Node 3 在主分片上面执行请求。如果成功了，它将请求并行转发到 Node 1 和 Node 2 的副本分片上。一旦所有的副本分片都报告成功, Node 3 将向协调节点报告成功，协调节点向客户端报告成功。<br>  在客户端收到成功响应时，文档变更已经在主分片和所有副本分片执行完成，变更是安全的。</p>
+</blockquote>
+<h3 id="获取文档"><a href="#获取文档" class="headerlink" title="获取文档"></a>获取文档</h3><p>我们可以从主分片或者从其它任意副本分片检索文档<br><img src="../images/elas_0403.png" alt=""><br>以下是从主分片或者副本分片检索文档的步骤顺序：</p>
+<blockquote>
+<p>1、客户端向 Node 1 发送获取请求。<br>2、节点使用文档的 _id 来确定文档属于分片 0 。分片 0 的副本分片存在于所有的三个节点上。 在这种情况下，它将请求转发到 Node 2 。<br>3、Node 2 将文档返回给 Node 1 ，然后将文档返回给客户端。<br>在处理读取请求时，协调结点在每次请求的时候都会通过轮询所有的副本分片来达到负载均衡。<br>  在文档被检索时，已经被索引的文档可能已经存在于主分片上但是还没有复制到副本分片。 在这种情况下，副本分片可能会报告文档不存在，但是主分片可能成功返回文档。 一旦索引请求成功返回给用户，文档在主分片和副本分片都是可用的</p>
+</blockquote>
+<h3 id="update文档"><a href="#update文档" class="headerlink" title="update文档"></a>update文档</h3><p>ES在更新文档时，其实是先搜索，再修改，最后同步到所有副本的操作。<br><img src="../images/elas_0404.png" alt=""><br>以下是部分更新一个文档的步骤：</p>
+<blockquote>
+<p>1，客户端向 Node 1 发送更新请求。<br>2，它将请求转发到主分片所在的 Node 3 。<br>3，Node 3 从主分片检索文档，修改 _source 字段中的 JSON ，并且尝试重新索引主分片的文档。 如果文档已经被另一个进程修改，它会重试步骤 3 ，超过 retry_on_conflict 次后放弃。<br>4，如果 Node 3 成功地更新文档，它将新版本的文档并行转发到 Node 1 和 Node 2 上的副本分片，重新建立索引。 一旦所有副本分片都返回成功， Node 3 向协调节点也返回成功，协调节点向客户端返回成功。</p>
+</blockquote>
+<h2 id="consistency-–-一致性保证"><a href="#consistency-–-一致性保证" class="headerlink" title="consistency – 一致性保证"></a>consistency – 一致性保证</h2><p>在默认设置下，即使仅仅是在试图执行一个<em>写</em>操作之前，主分片都会要求 必须要有 <em>规定数量(quorum)</em>的分片副本处于活跃可用状态，才会去执行<em>写</em>操作(其中分片副本可以是主分片或者副本分片)。这是为了避免在发生网络分区故障（network partition）的时候进行<em>写</em>操作，进而导致数据不一致。<em>规定数量</em>即：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">int( (primary + number_of_replicas) / 2 ) + 1</div></pre></td></tr></table></figure></p>
+<p>consistency可以设置为以下几种值：</p>
+<blockquote>
+<p>one : 只要主分片状态ok就可以执行写的操作。<br>all : 必须要所有的主分片和副分片状态正确才允许执行写操作。<br>quorum : 满足规定数量的副分片状态ok才执行写操作。</p>
+</blockquote>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/21/elasticsearch-冲突处理/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2017/08/21/elasticsearch-冲突处理/" itemprop="url">elasticsearch-冲突处理</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-21T15:56:30+08:00">
+                2017-08-21
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="ES冲突处理和版本控制"><a href="#ES冲突处理和版本控制" class="headerlink" title="ES冲突处理和版本控制"></a>ES冲突处理和版本控制</h1><p>&ensp;&ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似：</p>
+<p><img src="../images/elas_0301.png" alt=""></p>
+<blockquote>
+<p>web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我们会认为有超过商品的实际数量的库存，因为卖给顾客的库存商品并不存在，我们将让他们非常失望。</p>
+</blockquote>
+<p>&ensp;&ensp;变更越频繁，读数据和更新数据的间隙越长，也就越可能丢失变更。<br>&ensp;&ensp;在数据库领域中，有两种方法通常被用来确保并发更新时变更不会丢失：</p>
+<blockquote>
+<p>悲观并发控制<br>&ensp;&ensp;这种方法被关系型数据库广泛使用，它假定有变更冲突可能发生，因此阻塞访问资源以防止冲突。 一个典型的例子是读取一行数据之前先将其锁住，确保只有放置锁的线程能够对这行数据进行修改。<br>乐观并发控制<br>&ensp;&ensp;Elasticsearch 中使用的这种方法假定冲突是不可能发生的，并且不会阻塞正在尝试的操作。 然而，如果源数据在读写当中被修改，更新将会失败。应用程序接下来将决定该如何解决冲突。 例如，可以重试更新、使用新的数据、或者将相关情况报告给用户。</p>
+</blockquote>
+<h2 id="乐观并发控制-–-通过version控制"><a href="#乐观并发控制-–-通过version控制" class="headerlink" title="乐观并发控制 – 通过version控制"></a>乐观并发控制 – 通过version控制</h2><p>Elasticsearch 是分布式的。当文档创建、更新或删除时， 新版本的文档必须复制到集群中的其他节点。Elasticsearch 也是异步和并发的，这意味着这些复制请求被并行发送，并且到达目的地时也许 顺序是乱的 。 Elasticsearch 需要一种方法确保文档的旧版本不会覆盖新的版本。</p>
+<font size="4" color="#DC143C">每个文档都有一个 _version （版本）号，当文档被修改时版本号递增。 Elasticsearch 使用这个 _version 号来确保变更以正确顺序得到执行。如果旧版本的文档在新版本之后到达，它可以被简单的忽略。</font>
+
+<p>当我们尝试通过重建文档的索引来保存修改，我们指定 version 为我们的修改会被应用的版本：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">PUT /website/blog/1?version=1 </div><div class="line">&#123;</div><div class="line">  &quot;title&quot;: &quot;My first blog entry&quot;,</div><div class="line">  &quot;text&quot;:  &quot;Starting to get the hang of this...&quot;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<p><font size="4" color="#DC143C">然而，如果我们重新运行相同的索引请求，仍然指定 version=1 ， Elasticsearch 返回 409 Conflict HTTP 响应码</font><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">   &quot;error&quot;: &#123;</div><div class="line">      &quot;root_cause&quot;: [</div><div class="line">         &#123;</div><div class="line">            &quot;type&quot;: &quot;version_conflict_engine_exception&quot;,</div><div class="line">            &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;,</div><div class="line">            &quot;index&quot;: &quot;website&quot;,</div><div class="line">            &quot;shard&quot;: &quot;3&quot;</div><div class="line">         &#125;</div><div class="line">      ],</div><div class="line">      &quot;type&quot;: &quot;version_conflict_engine_exception&quot;,</div><div class="line">      &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;,</div><div class="line">      &quot;index&quot;: &quot;website&quot;,</div><div class="line">      &quot;shard&quot;: &quot;3&quot;</div><div class="line">   &#125;,</div><div class="line">   &quot;status&quot;: 409</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/17/elasticsearch-分页搜索/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1451,7 +1773,7 @@
           
             <div class="site-state-item site-state-posts">
               <a href="/archives/">
-                <span class="site-state-item-count">7</span>
+                <span class="site-state-item-count">9</span>
                 <span class="site-state-item-name">日志</span>
               </a>
             </div>
