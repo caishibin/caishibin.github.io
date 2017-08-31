@@ -94,18 +94,18 @@
 
 
 
-<meta name="description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
+<meta name="description" content="索引分词器基础概念分词器／分解器／词元过滤器 分词器由一个分解器（tokenizer）、零个或多个词元过滤器组成。 分解器前还包含有一个或多个字符过滤器（character filter），字符过滤器主要用于对查询字符串预处理，例如去除html标签，标点等。 分解器用来将查询字符串分解成一系列词元。 词元过滤器主要用来对分词器提取出的词元做进一步的处理，比如转小写，增加同义词等。处理后的结果称为索">
 <meta name="keywords" content="elasticsearch">
 <meta property="og:type" content="article">
-<meta property="og:title" content="elasticsearch 基础">
-<meta property="og:url" content="http://yoursite.com/2017/08/16/elasticsearch-basic/index.html">
+<meta property="og:title" content="elasticsearch 分词器">
+<meta property="og:url" content="http://yoursite.com/2017/08/23/elasticsearch-分词器/index.html">
 <meta property="og:site_name" content="总得留下点什么">
-<meta property="og:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
+<meta property="og:description" content="索引分词器基础概念分词器／分解器／词元过滤器 分词器由一个分解器（tokenizer）、零个或多个词元过滤器组成。 分解器前还包含有一个或多个字符过滤器（character filter），字符过滤器主要用于对查询字符串预处理，例如去除html标签，标点等。 分解器用来将查询字符串分解成一系列词元。 词元过滤器主要用来对分词器提取出的词元做进一步的处理，比如转小写，增加同义词等。处理后的结果称为索">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2017-08-16T06:16:04.000Z">
+<meta property="og:updated_time" content="2017-08-23T08:42:07.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="elasticsearch 基础">
-<meta name="twitter:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
+<meta name="twitter:title" content="elasticsearch 分词器">
+<meta name="twitter:description" content="索引分词器基础概念分词器／分解器／词元过滤器 分词器由一个分解器（tokenizer）、零个或多个词元过滤器组成。 分解器前还包含有一个或多个字符过滤器（character filter），字符过滤器主要用于对查询字符串预处理，例如去除html标签，标点等。 分解器用来将查询字符串分解成一系列词元。 词元过滤器主要用来对分词器提取出的词元做进一步的处理，比如转小写，增加同义词等。处理后的结果称为索">
 
 
 
@@ -134,13 +134,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2017/08/16/elasticsearch-basic/"/>
+  <link rel="canonical" href="http://yoursite.com/2017/08/23/elasticsearch-分词器/"/>
 
 
 
 
 
-  <title>elasticsearch 基础 | 总得留下点什么</title>
+  <title>elasticsearch 分词器 | 总得留下点什么</title>
   
 
 
@@ -277,7 +277,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/16/elasticsearch-basic/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/23/elasticsearch-分词器/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="蔡世滨">
@@ -294,7 +294,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">elasticsearch 基础</h1>
+          <h1 class="post-title" itemprop="name headline">elasticsearch 分词器</h1>
         
 
         <div class="post-meta">
@@ -306,8 +306,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-16T10:21:02+08:00">
-                2017-08-16
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-23T16:20:09+08:00">
+                2017-08-23
               </time>
             
 
@@ -366,26 +366,22 @@
       
 
       
-        <h1 id="elasticsearch几个重要的概念"><a href="#elasticsearch几个重要的概念" class="headerlink" title="elasticsearch几个重要的概念"></a>elasticsearch几个重要的概念</h1><h3 id="cluster"><a href="#cluster" class="headerlink" title="cluster"></a>cluster</h3><blockquote>
-<p>代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。</p>
-</blockquote>
-<h3 id="node"><a href="#node" class="headerlink" title="node"></a>node</h3><blockquote>
-<p>组成集群的每一个服务器称之为节点。</p>
-</blockquote>
-<h3 id="shards"><a href="#shards" class="headerlink" title="shards"></a>shards</h3><blockquote>
-<p>代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。<br>分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的：<br>    1，增加高可用性。<br>    2，提高性能。</p>
-</blockquote>
-<h3 id="replicas"><a href="#replicas" class="headerlink" title="replicas"></a>replicas</h3><blockquote>
-<p>代表索引副本，es可以设置多个索引的副本，副本的作用一是提高系统的容错性，当个某个节点某个分片损坏或丢失时可以从副本中恢复。二是提高es的查询效率，es会自动对搜索请求进行负载均衡。</p>
-</blockquote>
-<h3 id="recovery"><a href="#recovery" class="headerlink" title="recovery"></a>recovery</h3><blockquote>
-<p>代表数据恢复或叫数据重新分布，es在有节点加入或退出时会根据机器的负载对索引分片进行重新分配，挂掉的节点重新启动时也会进行数据恢复。</p>
-</blockquote>
-<h3 id="gateway"><a href="#gateway" class="headerlink" title="gateway"></a>gateway</h3><blockquote>
-<p>代表es索引的持久化存储方式，es默认是先把索引存放到内存中，当内存满了时再持久化到硬盘。当这个es集群关闭再重新启动时就会从gateway中读取索引数据。es支持多种类型的gateway，有本地文件系统（默认），分布式文件系统，Hadoop的HDFS和amazon的s3云存储服务。</p>
-</blockquote>
-<h3 id="index／type／document"><a href="#index／type／document" class="headerlink" title="index／type／document"></a>index／type／document</h3><blockquote>
-<p>索引，具有相同结构的文档集合。对应关系数据库的databases.<br>类型，在索引中，可以定义一个或多个类型，类型是索引的逻辑分区。对应关系数据库的table。<br>文档，真正存储的数据内容。对应关系数据库的一行记录。</p>
+        <h1 id="索引分词器"><a href="#索引分词器" class="headerlink" title="索引分词器"></a>索引分词器</h1><h2 id="基础概念"><a href="#基础概念" class="headerlink" title="基础概念"></a>基础概念</h2><h3 id="分词器／分解器／词元过滤器"><a href="#分词器／分解器／词元过滤器" class="headerlink" title="分词器／分解器／词元过滤器"></a>分词器／分解器／词元过滤器</h3><ul>
+<li>分词器由一个分解器（tokenizer）、零个或多个词元过滤器组成。</li>
+<li>分解器前还包含有一个或多个字符过滤器（character filter），字符过滤器主要用于对查询字符串预处理，例如去除html标签，标点等。</li>
+<li>分解器用来将查询字符串分解成一系列词元。</li>
+<li>词元过滤器主要用来对分词器提取出的词元做进一步的处理，比如转小写，增加同义词等。处理后的结果称为<font color="#DC143C" size="4">索引词</font>，文档中包含几个这样的索引词被称为<font color="#DC143C" size="4">词频</font>。</li>
+</ul>
+<h2 id="默认分词器"><a href="#默认分词器" class="headerlink" title="默认分词器"></a>默认分词器</h2><p>分析器可以从三个层面进行定义：按字段（per-field）、按索引（per-index）或全局缺省（global default）。Elasticsearch 会按照以下顺序依次处理，直到它找到能够使用的分析器。</p>
+<blockquote>
+<p>索引时的顺序如下：</p>
+<ul>
+<li>字段映射里定义的 analyzer</li>
+<li>索引设置中名为 default 的分析器，默认为standard标准分析器。<br>在搜索时，顺序有些许不同：</li>
+<li>查询自己定义的 analyzer </li>
+<li>字段映射里定义的 analyzer</li>
+<li>索引设置中名为 default 的分析器，默认为standard标准分析器。</li>
+</ul>
 </blockquote>
 
       
@@ -417,8 +413,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2017/08/14/spring-extendion/" rel="next" title="容器扩展点">
-                <i class="fa fa-chevron-left"></i> 容器扩展点
+              <a href="/2017/08/23/elasticsearch-mapping/" rel="next" title="elasticsearch  一些重要的关键词和参数">
+                <i class="fa fa-chevron-left"></i> elasticsearch  一些重要的关键词和参数
               </a>
             
           </div>
@@ -427,8 +423,8 @@
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2017/08/16/elasticsearch-操作/" rel="prev" title="elasticsearch 操作">
-                elasticsearch 操作 <i class="fa fa-chevron-right"></i>
+              <a href="/2017/08/31/elasticsearch-存储模型与读写操作/" rel="prev" title="elasticsearch 存储模型与读写操作">
+                elasticsearch 存储模型与读写操作 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>
@@ -582,7 +578,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#elasticsearch几个重要的概念"><span class="nav-number">1.</span> <span class="nav-text">elasticsearch几个重要的概念</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#cluster"><span class="nav-number">1.0.1.</span> <span class="nav-text">cluster</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#node"><span class="nav-number">1.0.2.</span> <span class="nav-text">node</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#shards"><span class="nav-number">1.0.3.</span> <span class="nav-text">shards</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#replicas"><span class="nav-number">1.0.4.</span> <span class="nav-text">replicas</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#recovery"><span class="nav-number">1.0.5.</span> <span class="nav-text">recovery</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#gateway"><span class="nav-number">1.0.6.</span> <span class="nav-text">gateway</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#index／type／document"><span class="nav-number">1.0.7.</span> <span class="nav-text">index／type／document</span></a></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#索引分词器"><span class="nav-number">1.</span> <span class="nav-text">索引分词器</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#基础概念"><span class="nav-number">1.1.</span> <span class="nav-text">基础概念</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#分词器／分解器／词元过滤器"><span class="nav-number">1.1.1.</span> <span class="nav-text">分词器／分解器／词元过滤器</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#默认分词器"><span class="nav-number">1.2.</span> <span class="nav-text">默认分词器</span></a></li></ol></li></ol></div>
             
 
           </div>

@@ -94,18 +94,18 @@
 
 
 
-<meta name="description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
+<meta name="description" content="_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。 利用自定义路由可以降低搜索的压力。仅仅将请求发送到匹配指定的分片而不是广播。  _source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。设置mapping时可选的参数analyzer">
 <meta name="keywords" content="elasticsearch">
 <meta property="og:type" content="article">
-<meta property="og:title" content="elasticsearch 基础">
-<meta property="og:url" content="http://yoursite.com/2017/08/16/elasticsearch-basic/index.html">
+<meta property="og:title" content="elasticsearch  一些重要的关键词和参数">
+<meta property="og:url" content="http://yoursite.com/2017/08/23/elasticsearch-mapping/index.html">
 <meta property="og:site_name" content="总得留下点什么">
-<meta property="og:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
+<meta property="og:description" content="_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。 利用自定义路由可以降低搜索的压力。仅仅将请求发送到匹配指定的分片而不是广播。  _source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。设置mapping时可选的参数analyzer">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2017-08-16T06:16:04.000Z">
+<meta property="og:updated_time" content="2017-08-23T07:50:39.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="elasticsearch 基础">
-<meta name="twitter:description" content="elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。  node 组成集群的每一个服务器称之为节点。  sha">
+<meta name="twitter:title" content="elasticsearch  一些重要的关键词和参数">
+<meta name="twitter:description" content="_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。 利用自定义路由可以降低搜索的压力。仅仅将请求发送到匹配指定的分片而不是广播。  _source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。设置mapping时可选的参数analyzer">
 
 
 
@@ -134,13 +134,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2017/08/16/elasticsearch-basic/"/>
+  <link rel="canonical" href="http://yoursite.com/2017/08/23/elasticsearch-mapping/"/>
 
 
 
 
 
-  <title>elasticsearch 基础 | 总得留下点什么</title>
+  <title>elasticsearch  一些重要的关键词和参数 | 总得留下点什么</title>
   
 
 
@@ -277,7 +277,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/16/elasticsearch-basic/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/23/elasticsearch-mapping/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="蔡世滨">
@@ -294,7 +294,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">elasticsearch 基础</h1>
+          <h1 class="post-title" itemprop="name headline">elasticsearch  一些重要的关键词和参数</h1>
         
 
         <div class="post-meta">
@@ -306,8 +306,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-16T10:21:02+08:00">
-                2017-08-16
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-23T14:59:41+08:00">
+                2017-08-23
               </time>
             
 
@@ -366,26 +366,29 @@
       
 
       
-        <h1 id="elasticsearch几个重要的概念"><a href="#elasticsearch几个重要的概念" class="headerlink" title="elasticsearch几个重要的概念"></a>elasticsearch几个重要的概念</h1><h3 id="cluster"><a href="#cluster" class="headerlink" title="cluster"></a>cluster</h3><blockquote>
-<p>代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。</p>
+        <h3 id="routing-在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。"><a href="#routing-在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。" class="headerlink" title="_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。"></a>_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。</h3><blockquote>
+<p>利用自定义路由可以降低搜索的压力。仅仅将请求发送到匹配指定的分片而不是广播。</p>
 </blockquote>
-<h3 id="node"><a href="#node" class="headerlink" title="node"></a>node</h3><blockquote>
-<p>组成集群的每一个服务器称之为节点。</p>
+<h3 id="source-包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。"><a href="#source-包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。" class="headerlink" title="_source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。"></a>_source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。</h3><h1 id="设置mapping时可选的参数"><a href="#设置mapping时可选的参数" class="headerlink" title="设置mapping时可选的参数"></a>设置mapping时可选的参数</h1><h3 id="analyzer"><a href="#analyzer" class="headerlink" title="analyzer"></a>analyzer</h3><blockquote>
+<p>字段指定分析器<br>analyzer : 用于索引包含连接词在内的所有索引词。<br>search_analyzer : 用于移除连接词的非短语查询。<br>search_quote_analyzer : 用于包含连接词在内的短语查询。</p>
 </blockquote>
-<h3 id="shards"><a href="#shards" class="headerlink" title="shards"></a>shards</h3><blockquote>
-<p>代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。<br>分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的：<br>    1，增加高可用性。<br>    2，提高性能。</p>
+<h3 id="boost"><a href="#boost" class="headerlink" title="boost"></a>boost</h3><blockquote>
+<p>在索引时对一个字段指定加权值。</p>
 </blockquote>
-<h3 id="replicas"><a href="#replicas" class="headerlink" title="replicas"></a>replicas</h3><blockquote>
-<p>代表索引副本，es可以设置多个索引的副本，副本的作用一是提高系统的容错性，当个某个节点某个分片损坏或丢失时可以从副本中恢复。二是提高es的查询效率，es会自动对搜索请求进行负载均衡。</p>
+<h3 id="dynamic"><a href="#dynamic" class="headerlink" title="dynamic"></a>dynamic</h3><blockquote>
+<p>控制字段是否动态的添加到文档当中<br>true : 新检测到的字段会被添加到映射中（默认）。<br>false ：新检测到的字段会被忽略。<br>strict ：如果新字段被检测到，抛出异常并且文档会被丢弃。</p>
 </blockquote>
-<h3 id="recovery"><a href="#recovery" class="headerlink" title="recovery"></a>recovery</h3><blockquote>
-<p>代表数据恢复或叫数据重新分布，es在有节点加入或退出时会根据机器的负载对索引分片进行重新分配，挂掉的节点重新启动时也会进行数据恢复。</p>
+<h3 id="ignore-above"><a href="#ignore-above" class="headerlink" title="ignore_above"></a>ignore_above</h3><blockquote>
+<p>比该值设置长的字符串不会被分词或索引。<br>lucene是字节计数的，ignore_above设置的是字符数，所以设置的最大限制为32766 ／ 3 = 10922.</p>
 </blockquote>
-<h3 id="gateway"><a href="#gateway" class="headerlink" title="gateway"></a>gateway</h3><blockquote>
-<p>代表es索引的持久化存储方式，es默认是先把索引存放到内存中，当内存满了时再持久化到硬盘。当这个es集群关闭再重新启动时就会从gateway中读取索引数据。es支持多种类型的gateway，有本地文件系统（默认），分布式文件系统，Hadoop的HDFS和amazon的s3云存储服务。</p>
+<h3 id="ignore-malformed"><a href="#ignore-malformed" class="headerlink" title="ignore_malformed"></a>ignore_malformed</h3><blockquote>
+<p>默认为false,如果索引错误的数据类型时抛出异常并拒绝索引整个文档。如果设置为true,则异常会被忽略，字段不会被索引。</p>
 </blockquote>
-<h3 id="index／type／document"><a href="#index／type／document" class="headerlink" title="index／type／document"></a>index／type／document</h3><blockquote>
-<p>索引，具有相同结构的文档集合。对应关系数据库的databases.<br>类型，在索引中，可以定义一个或多个类型，类型是索引的逻辑分区。对应关系数据库的table。<br>文档，真正存储的数据内容。对应关系数据库的一行记录。</p>
+<h3 id="include-in-all"><a href="#include-in-all" class="headerlink" title="include_in_all"></a>include_in_all</h3><blockquote>
+<p>对每个字段进行控制是否包含在——all字段中。</p>
+</blockquote>
+<h3 id="index"><a href="#index" class="headerlink" title="index"></a>index</h3><blockquote>
+<p>控制字段如何进行索引<br>no : 字段不被索引<br>not_analyzed : 字段不被分词，直接加到索引中<br>analyzed : 默认分词再索引。</p>
 </blockquote>
 
       
@@ -417,8 +420,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2017/08/14/spring-extendion/" rel="next" title="容器扩展点">
-                <i class="fa fa-chevron-left"></i> 容器扩展点
+              <a href="/2017/08/21/elasticsearch-路由和分片/" rel="next" title="elasticsearch-路由和分片">
+                <i class="fa fa-chevron-left"></i> elasticsearch-路由和分片
               </a>
             
           </div>
@@ -427,8 +430,8 @@
 
           <div class="post-nav-prev post-nav-item">
             
-              <a href="/2017/08/16/elasticsearch-操作/" rel="prev" title="elasticsearch 操作">
-                elasticsearch 操作 <i class="fa fa-chevron-right"></i>
+              <a href="/2017/08/23/elasticsearch-分词器/" rel="prev" title="elasticsearch 分词器">
+                elasticsearch 分词器 <i class="fa fa-chevron-right"></i>
               </a>
             
           </div>
@@ -582,7 +585,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#elasticsearch几个重要的概念"><span class="nav-number">1.</span> <span class="nav-text">elasticsearch几个重要的概念</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#cluster"><span class="nav-number">1.0.1.</span> <span class="nav-text">cluster</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#node"><span class="nav-number">1.0.2.</span> <span class="nav-text">node</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#shards"><span class="nav-number">1.0.3.</span> <span class="nav-text">shards</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#replicas"><span class="nav-number">1.0.4.</span> <span class="nav-text">replicas</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#recovery"><span class="nav-number">1.0.5.</span> <span class="nav-text">recovery</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#gateway"><span class="nav-number">1.0.6.</span> <span class="nav-text">gateway</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#index／type／document"><span class="nav-number">1.0.7.</span> <span class="nav-text">index／type／document</span></a></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#routing-在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。"><span class="nav-number">1.</span> <span class="nav-text">_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#source-包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。"><span class="nav-number">2.</span> <span class="nav-text">_source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#设置mapping时可选的参数"><span class="nav-number"></span> <span class="nav-text">设置mapping时可选的参数</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#analyzer"><span class="nav-number">1.</span> <span class="nav-text">analyzer</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#boost"><span class="nav-number">2.</span> <span class="nav-text">boost</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#dynamic"><span class="nav-number">3.</span> <span class="nav-text">dynamic</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ignore-above"><span class="nav-number">4.</span> <span class="nav-text">ignore_above</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ignore-malformed"><span class="nav-number">5.</span> <span class="nav-text">ignore_malformed</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#include-in-all"><span class="nav-number">6.</span> <span class="nav-text">include_in_all</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#index"><span class="nav-number">7.</span> <span class="nav-text">index</span></a></li></ol></div>
             
 
           </div>

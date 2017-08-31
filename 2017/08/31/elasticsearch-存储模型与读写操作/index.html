@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+  
+  
+  
+  
+
+  
+    
+    
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+    
+    
+    <link href="//fonts.googleapis.com/css?family=Lato:300,300italic,400,400italic,700,700italic&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+  
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.2" rel="stylesheet" type="text/css" />
+
+
+  <meta name="keywords" content="elasticsearch," />
+
+
+
+
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=5.1.2" />
+
+
+
+
+
+
+<meta name="description" content="分辨es索引和lucene索引 Elasticsearch中的索引是组织数据的逻辑空间(就好比数据库)。1个Elasticsearch的索引有1个或者多个分片(默认是5个)。分片对应实际存储数据的Lucene的索引，分片自身就是一个搜索引擎。每个分片有0或者多个副本(默认是1个)。Elasticsearch的索引还包含”type”(就像数据库中的表)，用于逻辑上隔离索引中的数据。在Elastics">
+<meta name="keywords" content="elasticsearch">
+<meta property="og:type" content="article">
+<meta property="og:title" content="elasticsearch 存储模型与读写操作">
+<meta property="og:url" content="http://yoursite.com/2017/08/31/elasticsearch-存储模型与读写操作/index.html">
+<meta property="og:site_name" content="总得留下点什么">
+<meta property="og:description" content="分辨es索引和lucene索引 Elasticsearch中的索引是组织数据的逻辑空间(就好比数据库)。1个Elasticsearch的索引有1个或者多个分片(默认是5个)。分片对应实际存储数据的Lucene的索引，分片自身就是一个搜索引擎。每个分片有0或者多个副本(默认是1个)。Elasticsearch的索引还包含”type”(就像数据库中的表)，用于逻辑上隔离索引中的数据。在Elastics">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="http://yoursite.com/2017/08/31/images/es索引.jpeg">
+<meta property="og:image" content="http://yoursite.com/2017/08/31/images/倒排索引.JPG">
+<meta property="og:image" content="http://yoursite.com/2017/08/31/images/create.jpeg">
+<meta property="og:image" content="http://yoursite.com/2017/08/31/images/查询提取.jpeg">
+<meta property="og:updated_time" content="2017-08-31T07:45:22.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="elasticsearch 存储模型与读写操作">
+<meta name="twitter:description" content="分辨es索引和lucene索引 Elasticsearch中的索引是组织数据的逻辑空间(就好比数据库)。1个Elasticsearch的索引有1个或者多个分片(默认是5个)。分片对应实际存储数据的Lucene的索引，分片自身就是一个搜索引擎。每个分片有0或者多个副本(默认是1个)。Elasticsearch的索引还包含”type”(就像数据库中的表)，用于逻辑上隔离索引中的数据。在Elastics">
+<meta name="twitter:image" content="http://yoursite.com/2017/08/31/images/es索引.jpeg">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    sidebar: {"position":"left","display":"post","offset":12,"offset_float":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: true,
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2017/08/31/elasticsearch-存储模型与读写操作/"/>
+
+
+
+
+
+  <title>elasticsearch 存储模型与读写操作 | 总得留下点什么</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail ">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">总得留下点什么</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle">技术随笔</p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2017/08/31/elasticsearch-存储模型与读写操作/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="蔡世滨">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="总得留下点什么">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">elasticsearch 存储模型与读写操作</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2017-08-31T15:25:20+08:00">
+                2017-08-31
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/elasticsearch/" itemprop="url" rel="index">
+                    <span itemprop="name">elasticsearch</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="分辨es索引和lucene索引"><a href="#分辨es索引和lucene索引" class="headerlink" title="分辨es索引和lucene索引"></a>分辨es索引和lucene索引</h1><blockquote>
+<p>Elasticsearch中的索引是组织数据的逻辑空间(就好比数据库)。1个Elasticsearch的索引有1个或者多个分片(默认是5个)。分片对应实际存储数据的Lucene的索引，分片自身就是一个搜索引擎。每个分片有0或者多个副本(默认是1个)。Elasticsearch的索引还包含”type”(就像数据库中的表)，用于逻辑上隔离索引中的数据。在Elasticsearch的索引中，给定一个type，它的所有文档会拥有相同的属性(就像表的schema)。</p>
+</blockquote>
+<p><img src="../images/es索引.jpeg" alt=""></p>
+<h1 id="节点类型"><a href="#节点类型" class="headerlink" title="节点类型"></a>节点类型</h1><ul>
+<li>Master Eligible Node （候选主节点）：设置成node.master=true (default)都可能会被选举为主节点；</li>
+<li>Master Node （主节点）：由候选主节点选举出来的，负责管理 ES 集群，通过广播的机制与其他节点维持关系，负责集群中的 DDL 操作（创建/删除索引），管理其他节点上的分片（shard）；<blockquote>
+<p>Tips: 关于 Master 脑裂问题。候选主节点之间出现了网络分区则可能会出现集群脑裂的情况，导致数据不一致或者数据丢失。我们可以通过设置discovery.zen.minimum_master_nodes设置为(master_eligible_nodes / 2) + 1将避免掉这个问题，弊端就是当候选主节点数由于宕机等不确定因素导致少于(master_eligible_nodes / 2) + 1的话，集群将无法正常运作下去.</p>
+</blockquote>
+</li>
+<li>Data Node（数据节点）：很好理解，存放数据的节点，负责数据的增删改查 CRUD；</li>
+<li>Ingest Node（提取节点）：能执行预处理管道，有自己独立的任务要执行，类似于 logstash 的功能，不负责数据也不负责集群相关的事务；通过node.ingest配置。</li>
+<li>Tribe Node（部落节点）：协调集群与集群之间的节点。</li>
+<li>Coordinating Node(协调节点)：每一个节点都是一个潜在的协调节点，且不能被禁用，协调节点最大的作用就是将各个分片里的数据汇集起来一并返回给客户端，因此 ES 的节点需要有足够的 CPU 和内存去处理协调节点的 gather 阶段。</li>
+</ul>
+<h1 id="Transport-Client-与-Node-Client"><a href="#Transport-Client-与-Node-Client" class="headerlink" title="Transport Client 与 Node Client"></a>Transport Client 与 Node Client</h1><p>如果你使用的是 Java，你可能想知道何时使用传输客户端（注：Transport Client，下同）与节点客户端（注：Node Client，下同）。 在书的开头所述， 传输客户端作为一个集群和应用程序之间的通信层。它知道 API 并能自动帮你在节点之间轮询，帮你嗅探集群等等。但它是集群 外部的 ，和 REST 客户端类似。</p>
+<p>另一方面，节点客户端，实际上是一个集群中的节点（但不保存数据，不能成为主节点）。因为它是一个节点，它知道整个集群状态（所有节点驻留，分片分布在哪些节点，等等）。 这意味着它可以执行 APIs 但少了一个网络跃点。</p>
+<blockquote>
+<p>这里有两个客户端案例的使用情况：</p>
+<p>如果要将应用程序和 Elasticsearch 集群进行解耦，传输客户端是一个理想的选择。例如，如果您的应用程序需要快速的创建和销毁到集群的连接，传输客户端比节点客户端”轻”，因为它不是一个集群的一部分。</p>
+<p>类似地，如果您需要创建成千上万的连接，你不想有成千上万节点加入集群。传输客户端（ TC ）将是一个更好的选择。</p>
+<p>另一方面，如果你只需要有少数的、长期持久的对象连接到集群，客户端节点可以更高效，因为它知道集群的布局。但是它会使你的应用程序和集群耦合在一起，所以从防火墙的角度，它可能会构成问题。</p>
+</blockquote>
+<h1 id="存储模型"><a href="#存储模型" class="headerlink" title="存储模型"></a>存储模型</h1><p>我们来看下如下2个文档是如何被倒排索引的：</p>
+<p>文档1(Doc 1): Insight Data Engineering Fellows Program<br>文档2(Doc 2): Insight Data Science Fellows Program</p>
+<p>如果我们想找包含词项”insight”的文档，我们可以扫描这个(单词有序的)倒排索引，找到”insight”并返回包含改词的文档ID，示例中是Doc 1和Doc 2。<br><img src="../images/倒排索引.JPG" alt=""></p>
+<p>为了提高可检索性(比如希望大小写单词都返回)，我们应当先分析文档再对其索引。分析包括2个部分：</p>
+<p>将句子词条化为独立的单词<br>将单词规范化为标准形式<br>默认情况下，Elasticsearch使用标准分析器，它使用了：</p>
+<p>标准分词器以单词为界来切词<br>小写词条(token)过滤器来转换单词</p>
+<h1 id="剖析写操作"><a href="#剖析写操作" class="headerlink" title="剖析写操作"></a>剖析写操作</h1><h2 id="创建-C-reate"><a href="#创建-C-reate" class="headerlink" title="创建((C)reate)"></a>创建((C)reate)</h2><p>当我们发送索引一个新文档的请求到协调节点后，将发生如下一组操作：</p>
+<ul>
+<li>Elasticsearch集群中的每个节点都包含了改节点上分片的元数据信息。协调节点(默认)使用文档ID参与计算，以便为路由提供合适的分片。Elasticsearch使用shard = hash(document_id) % (num_of_primary_shards)函数对文档ID进行哈希，其结果再对分片数量取模，得到的结果即是索引文档的分片。</li>
+<li>当分片所在的节点接收到来自协调节点的请求后，会将该请求写入translog(我们将在本系列接下来的文章中讲到)，并将文档加入内存缓冲。如果请求在主分片上成功处理，该请求会并行发送到该分片的副本上。当translog被同步(fsync)到全部的主分片及其副本上后，客户端才会收到确认通知。</li>
+<li>内存缓冲会被周期性刷新(默认是1秒)，内容将被写到文件系统缓存的一个新段上。虽然这个段并没有被同步(fsync)，但它是开放的，内容可以被搜索到。</li>
+<li>每30分钟，或者当translog很大的时候，translog会被清空，文件系统缓存会被同步。这个过程在Elasticsearch中称为冲洗(flush)。在冲洗过程中，内存中的缓冲将被清除，内容被写入一个新段。段的fsync将创建一个新的提交点，并将内容刷新到磁盘。旧的translog将被删除并开始一个新的translog。</li>
+</ul>
+<p><img src="../images/create.jpeg" alt=""></p>
+<h2 id="更新-U-pdate-和删除-D-elete"><a href="#更新-U-pdate-和删除-D-elete" class="headerlink" title="更新((U)pdate)和删除((D)elete)"></a>更新((U)pdate)和删除((D)elete)</h2><p>删除和更新也都是写操作。但是Elasticsearch中的文档是不可变的，因此不能被删除或者改动以展示其变更。那么，该如何删除和更新文档呢？</p>
+<ul>
+<li><p>磁盘上的每个段都有一个相应的.del文件。当删除请求发送后，文档并没有真的被删除，而是在.del文件中被标记为删除。该文档依然能匹配查询，但是会在结果中被过滤掉。当段合并(我们将在本系列接下来的文章中讲到)时，在.del文件中被标记为删除的文档将不会被写入新段。</p>
+</li>
+<li><p>接下来我们看更新是如何工作的。在新的文档被创建时，Elasticsearch会为该文档指定一个版本号。当执行更新时，旧版本的文档在.del文件中被标记为删除，新版本的文档被索引到一个新段。旧版本的文档依然能匹配查询，但是会在结果中被过滤掉。</p>
+</li>
+</ul>
+<h2 id="剖析读操作-R-ead"><a href="#剖析读操作-R-ead" class="headerlink" title="剖析读操作((R)ead)"></a>剖析读操作((R)ead)</h2><p>读操作包含2部分内容：</p>
+<ul>
+<li>查询阶段</li>
+<li>提取阶段</li>
+</ul>
+<blockquote>
+<p>查询阶段<br>在这个阶段，协调节点会将查询请求路由到索引的全部分片(主分片或者其副本)上。每个分片独立执行查询，并为查询结果创建一个优先队列，以相关性得分排序(我们将在本系列的后续文章中讲到)。全部分片都将匹配文档的ID及其相关性得分返回给协调节点。协调节点创建一个优先队列并对结果进行全局排序。会有很多文档匹配结果，但是，默认情况下，每个分片只发送前10个结果给协调节点，协调节点为全部分片上的这些结果创建优先队列并返回前10个作为hit。</p>
+<p>提取阶段<br>当协调节点在生成的全局有序的文档列表中，为全部结果排好序后，它将向包含原始文档的分片发起请求。全部分片填充文档信息并将其返回给协调节点。</p>
+</blockquote>
+<p><img src="../images/查询提取.jpeg" alt=""></p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/elasticsearch/" rel="tag"># elasticsearch</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2017/08/23/elasticsearch-分词器/" rel="next" title="elasticsearch 分词器">
+                <i class="fa fa-chevron-left"></i> elasticsearch 分词器
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+  <div class="comments" id="comments">
+    
+  </div>
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap" >
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+          <img class="site-author-image" itemprop="image"
+               src="/images/avatar.jpeg"
+               alt="蔡世滨" />
+          <p class="site-author-name" itemprop="name">蔡世滨</p>
+           
+              <p class="site-description motion-element" itemprop="description"></p>
+          
+        </div>
+        <nav class="site-state motion-element">
+
+          
+            <div class="site-state-item site-state-posts">
+              <a href="/archives/">
+                <span class="site-state-item-count">12</span>
+                <span class="site-state-item-name">日志</span>
+              </a>
+            </div>
+          
+
+          
+            
+            
+            <div class="site-state-item site-state-categories">
+              <a href="/categories/index.html">
+                <span class="site-state-item-count">2</span>
+                <span class="site-state-item-name">分类</span>
+              </a>
+            </div>
+          
+
+          
+            
+            
+            <div class="site-state-item site-state-tags">
+              <a href="/tags/index.html">
+                <span class="site-state-item-count">2</span>
+                <span class="site-state-item-name">标签</span>
+              </a>
+            </div>
+          
+
+        </nav>
+
+        
+
+        <div class="links-of-author motion-element">
+          
+            
+              <span class="links-of-author-item">
+                <a href="https://github.com/caishibin" target="_blank" title="GitHub">
+                  
+                    <i class="fa fa-fw fa-github"></i>
+                  
+                    
+                      GitHub
+                    
+                </a>
+              </span>
+            
+          
+        </div>
+
+        
+        
+          <div class="cc-license motion-element" itemprop="license">
+            <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" target="_blank">
+              <img src="/images/cc-by-nc-sa.svg" alt="Creative Commons" />
+            </a>
+          </div>
+        
+
+        
+        
+
+        
+
+
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#分辨es索引和lucene索引"><span class="nav-number">1.</span> <span class="nav-text">分辨es索引和lucene索引</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#节点类型"><span class="nav-number">2.</span> <span class="nav-text">节点类型</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Transport-Client-与-Node-Client"><span class="nav-number">3.</span> <span class="nav-text">Transport Client 与 Node Client</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#存储模型"><span class="nav-number">4.</span> <span class="nav-text">存储模型</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#剖析写操作"><span class="nav-number">5.</span> <span class="nav-text">剖析写操作</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#创建-C-reate"><span class="nav-number">5.1.</span> <span class="nav-text">创建((C)reate)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#更新-U-pdate-和删除-D-elete"><span class="nav-number">5.2.</span> <span class="nav-text">更新((U)pdate)和删除((D)elete)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#剖析读操作-R-ead"><span class="nav-number">5.3.</span> <span class="nav-text">剖析读操作((R)ead)</span></a></li></ol></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright" >
+  
+  &copy; 
+  <span itemprop="copyrightYear">2017</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">蔡世滨</span>
+</div>
+
+
+<div class="powered-by">
+  由 <a class="theme-link" href="https://hexo.io">Hexo</a> 强力驱动
+</div>
+
+<div class="theme-info">
+  主题 -
+  <a class="theme-link" href="https://github.com/iissnan/hexo-theme-next">
+    NexT.Gemini
+  </a>
+</div>
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+
+  
+  <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+
+  
+  <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+  
+  <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.2"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.2"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=5.1.2"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=5.1.2"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.2"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.2"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.2"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
