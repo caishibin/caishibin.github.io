@@ -1,135 +1,569 @@
 <?xml version="1.0" encoding="utf-8"?>
-<search>
-  <entry>
-    <title><![CDATA[elasticsearch 存储模型与读写操作]]></title>
-    <url>%2F2017%2F08%2F31%2Felasticsearch-%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AF%BB%E5%86%99%E6%93%8D%E4%BD%9C%2F</url>
-    <content type="text"><![CDATA[分辨es索引和lucene索引 Elasticsearch中的索引是组织数据的逻辑空间(就好比数据库)。1个Elasticsearch的索引有1个或者多个分片(默认是5个)。分片对应实际存储数据的Lucene的索引，分片自身就是一个搜索引擎。每个分片有0或者多个副本(默认是1个)。Elasticsearch的索引还包含”type”(就像数据库中的表)，用于逻辑上隔离索引中的数据。在Elasticsearch的索引中，给定一个type，它的所有文档会拥有相同的属性(就像表的schema)。 节点类型 Master Eligible Node （候选主节点）：设置成node.master=true (default)都可能会被选举为主节点； Master Node （主节点）：由候选主节点选举出来的，负责管理 ES 集群，通过广播的机制与其他节点维持关系，负责集群中的 DDL 操作（创建/删除索引），管理其他节点上的分片（shard）； Tips: 关于 Master 脑裂问题。候选主节点之间出现了网络分区则可能会出现集群脑裂的情况，导致数据不一致或者数据丢失。我们可以通过设置discovery.zen.minimum_master_nodes设置为(master_eligible_nodes / 2) + 1将避免掉这个问题，弊端就是当候选主节点数由于宕机等不确定因素导致少于(master_eligible_nodes / 2) + 1的话，集群将无法正常运作下去. Data Node（数据节点）：很好理解，存放数据的节点，负责数据的增删改查 CRUD； Ingest Node（提取节点）：能执行预处理管道，有自己独立的任务要执行，类似于 logstash 的功能，不负责数据也不负责集群相关的事务；通过node.ingest配置。 Tribe Node（部落节点）：协调集群与集群之间的节点。 Coordinating Node(协调节点)：每一个节点都是一个潜在的协调节点，且不能被禁用，协调节点最大的作用就是将各个分片里的数据汇集起来一并返回给客户端，因此 ES 的节点需要有足够的 CPU 和内存去处理协调节点的 gather 阶段。 Transport Client 与 Node Client如果你使用的是 Java，你可能想知道何时使用传输客户端（注：Transport Client，下同）与节点客户端（注：Node Client，下同）。 在书的开头所述， 传输客户端作为一个集群和应用程序之间的通信层。它知道 API 并能自动帮你在节点之间轮询，帮你嗅探集群等等。但它是集群 外部的 ，和 REST 客户端类似。 另一方面，节点客户端，实际上是一个集群中的节点（但不保存数据，不能成为主节点）。因为它是一个节点，它知道整个集群状态（所有节点驻留，分片分布在哪些节点，等等）。 这意味着它可以执行 APIs 但少了一个网络跃点。 这里有两个客户端案例的使用情况： 如果要将应用程序和 Elasticsearch 集群进行解耦，传输客户端是一个理想的选择。例如，如果您的应用程序需要快速的创建和销毁到集群的连接，传输客户端比节点客户端”轻”，因为它不是一个集群的一部分。 类似地，如果您需要创建成千上万的连接，你不想有成千上万节点加入集群。传输客户端（ TC ）将是一个更好的选择。 另一方面，如果你只需要有少数的、长期持久的对象连接到集群，客户端节点可以更高效，因为它知道集群的布局。但是它会使你的应用程序和集群耦合在一起，所以从防火墙的角度，它可能会构成问题。 存储模型我们来看下如下2个文档是如何被倒排索引的： 文档1(Doc 1): Insight Data Engineering Fellows Program文档2(Doc 2): Insight Data Science Fellows Program 如果我们想找包含词项”insight”的文档，我们可以扫描这个(单词有序的)倒排索引，找到”insight”并返回包含改词的文档ID，示例中是Doc 1和Doc 2。 为了提高可检索性(比如希望大小写单词都返回)，我们应当先分析文档再对其索引。分析包括2个部分： 将句子词条化为独立的单词将单词规范化为标准形式默认情况下，Elasticsearch使用标准分析器，它使用了： 标准分词器以单词为界来切词小写词条(token)过滤器来转换单词 剖析写操作创建((C)reate)当我们发送索引一个新文档的请求到协调节点后，将发生如下一组操作： Elasticsearch集群中的每个节点都包含了改节点上分片的元数据信息。协调节点(默认)使用文档ID参与计算，以便为路由提供合适的分片。Elasticsearch使用shard = hash(document_id) % (num_of_primary_shards)函数对文档ID进行哈希，其结果再对分片数量取模，得到的结果即是索引文档的分片。 当分片所在的节点接收到来自协调节点的请求后，会将该请求写入translog(我们将在本系列接下来的文章中讲到)，并将文档加入内存缓冲。如果请求在主分片上成功处理，该请求会并行发送到该分片的副本上。当translog被同步(fsync)到全部的主分片及其副本上后，客户端才会收到确认通知。 内存缓冲会被周期性刷新(默认是1秒)，内容将被写到文件系统缓存的一个新段上。虽然这个段并没有被同步(fsync)，但它是开放的，内容可以被搜索到。 每30分钟，或者当translog很大的时候，translog会被清空，文件系统缓存会被同步。这个过程在Elasticsearch中称为冲洗(flush)。在冲洗过程中，内存中的缓冲将被清除，内容被写入一个新段。段的fsync将创建一个新的提交点，并将内容刷新到磁盘。旧的translog将被删除并开始一个新的translog。 更新((U)pdate)和删除((D)elete)删除和更新也都是写操作。但是Elasticsearch中的文档是不可变的，因此不能被删除或者改动以展示其变更。那么，该如何删除和更新文档呢？ 磁盘上的每个段都有一个相应的.del文件。当删除请求发送后，文档并没有真的被删除，而是在.del文件中被标记为删除。该文档依然能匹配查询，但是会在结果中被过滤掉。当段合并(我们将在本系列接下来的文章中讲到)时，在.del文件中被标记为删除的文档将不会被写入新段。 接下来我们看更新是如何工作的。在新的文档被创建时，Elasticsearch会为该文档指定一个版本号。当执行更新时，旧版本的文档在.del文件中被标记为删除，新版本的文档被索引到一个新段。旧版本的文档依然能匹配查询，但是会在结果中被过滤掉。 剖析读操作((R)ead)读操作包含2部分内容： 查询阶段 提取阶段 查询阶段在这个阶段，协调节点会将查询请求路由到索引的全部分片(主分片或者其副本)上。每个分片独立执行查询，并为查询结果创建一个优先队列，以相关性得分排序(我们将在本系列的后续文章中讲到)。全部分片都将匹配文档的ID及其相关性得分返回给协调节点。协调节点创建一个优先队列并对结果进行全局排序。会有很多文档匹配结果，但是，默认情况下，每个分片只发送前10个结果给协调节点，协调节点为全部分片上的这些结果创建优先队列并返回前10个作为hit。 提取阶段当协调节点在生成的全局有序的文档列表中，为全部结果排好序后，它将向包含原始文档的分片发起请求。全部分片填充文档信息并将其返回给协调节点。]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch 分词器]]></title>
-    <url>%2F2017%2F08%2F23%2Felasticsearch-%E5%88%86%E8%AF%8D%E5%99%A8%2F</url>
-    <content type="text"><![CDATA[索引分词器基础概念分词器／分解器／词元过滤器 分词器由一个分解器（tokenizer）、零个或多个词元过滤器组成。 分解器前还包含有一个或多个字符过滤器（character filter），字符过滤器主要用于对查询字符串预处理，例如去除html标签，标点等。 分解器用来将查询字符串分解成一系列词元。 词元过滤器主要用来对分词器提取出的词元做进一步的处理，比如转小写，增加同义词等。处理后的结果称为索引词，文档中包含几个这样的索引词被称为词频。 默认分词器分析器可以从三个层面进行定义：按字段（per-field）、按索引（per-index）或全局缺省（global default）。Elasticsearch 会按照以下顺序依次处理，直到它找到能够使用的分析器。 索引时的顺序如下： 字段映射里定义的 analyzer 索引设置中名为 default 的分析器，默认为standard标准分析器。在搜索时，顺序有些许不同： 查询自己定义的 analyzer 字段映射里定义的 analyzer 索引设置中名为 default 的分析器，默认为standard标准分析器。]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch 一些重要的关键词和参数]]></title>
-    <url>%2F2017%2F08%2F23%2Felasticsearch-mapping%2F</url>
-    <content type="text"><![CDATA[_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。 利用自定义路由可以降低搜索的压力。仅仅将请求发送到匹配指定的分片而不是广播。 _source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。设置mapping时可选的参数analyzer 字段指定分析器analyzer : 用于索引包含连接词在内的所有索引词。search_analyzer : 用于移除连接词的非短语查询。search_quote_analyzer : 用于包含连接词在内的短语查询。 boost 在索引时对一个字段指定加权值。 dynamic 控制字段是否动态的添加到文档当中true : 新检测到的字段会被添加到映射中（默认）。false ：新检测到的字段会被忽略。strict ：如果新字段被检测到，抛出异常并且文档会被丢弃。 ignore_above 比该值设置长的字符串不会被分词或索引。lucene是字节计数的，ignore_above设置的是字符数，所以设置的最大限制为32766 ／ 3 = 10922. ignore_malformed 默认为false,如果索引错误的数据类型时抛出异常并拒绝索引整个文档。如果设置为true,则异常会被忽略，字段不会被索引。 include_in_all 对每个字段进行控制是否包含在——all字段中。 index 控制字段如何进行索引no : 字段不被索引not_analyzed : 字段不被分词，直接加到索引中analyzed : 默认分词再索引。]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch-路由和分片]]></title>
-    <url>%2F2017%2F08%2F21%2Felasticsearch-%E8%B7%AF%E7%94%B1%E5%92%8C%E5%88%86%E7%89%87%2F</url>
-    <content type="text"><![CDATA[路由一个文档到分片中当索引一个文档的时候，文档会被存储到一个主分片中。Elasticsearch 如何知道一个文档应该存放到哪个分片中呢？给出一个公式：1shard = hash(routing) % number_of_primary_shards routing 是一个可变值，默认是文档的 _id ，也可以设置成一个自定义的值。 routing 通过 hash 函数生成一个数字，然后这个数字再除以 number_of_primary_shards （主分片的数量）后得到 余数 。这个分布在 0 到 number_of_primary_shards-1 之间的余数，就是我们所寻求的文档所在分片的位置。 主分片和副分片如何交互假设有一个集群由三个节点组成。 它包含一个叫 blogs 的索引，有两个主分片，每个主分片有两个副本分片。相同分片的副本不会放在同一节点，则集群中分片的情况如下图所示： 请求可以发送到集群中的任一节点。每个节点都有能力处理任意请求，每个节点都知道集群中任意文档的位置。所以都可以将请求转发到需要的节点上。 新建、索引和删除 请求都是 写 操作， 必须在主分片上面完成之后才能被复制到相关的副本分片以下是一个索引的过程： 1, 客户端向 Node 1 发送新建、索引或者删除请求。 2, 节点使用文档的 _id 确定文档属于分片 0 。请求会被转发到 Node 3，因为分片 0 的主分片目前被分配在Node 3 上。 3, Node 3 在主分片上面执行请求。如果成功了，它将请求并行转发到 Node 1 和 Node 2 的副本分片上。一旦所有的副本分片都报告成功, Node 3 将向协调节点报告成功，协调节点向客户端报告成功。 在客户端收到成功响应时，文档变更已经在主分片和所有副本分片执行完成，变更是安全的。 获取文档我们可以从主分片或者从其它任意副本分片检索文档以下是从主分片或者副本分片检索文档的步骤顺序： 1、客户端向 Node 1 发送获取请求。2、节点使用文档的 _id 来确定文档属于分片 0 。分片 0 的副本分片存在于所有的三个节点上。 在这种情况下，它将请求转发到 Node 2 。3、Node 2 将文档返回给 Node 1 ，然后将文档返回给客户端。在处理读取请求时，协调结点在每次请求的时候都会通过轮询所有的副本分片来达到负载均衡。 在文档被检索时，已经被索引的文档可能已经存在于主分片上但是还没有复制到副本分片。 在这种情况下，副本分片可能会报告文档不存在，但是主分片可能成功返回文档。 一旦索引请求成功返回给用户，文档在主分片和副本分片都是可用的 update文档ES在更新文档时，其实是先搜索，再修改，最后同步到所有副本的操作。以下是部分更新一个文档的步骤： 1，客户端向 Node 1 发送更新请求。2，它将请求转发到主分片所在的 Node 3 。3，Node 3 从主分片检索文档，修改 _source 字段中的 JSON ，并且尝试重新索引主分片的文档。 如果文档已经被另一个进程修改，它会重试步骤 3 ，超过 retry_on_conflict 次后放弃。4，如果 Node 3 成功地更新文档，它将新版本的文档并行转发到 Node 1 和 Node 2 上的副本分片，重新建立索引。 一旦所有副本分片都返回成功， Node 3 向协调节点也返回成功，协调节点向客户端返回成功。 consistency – 一致性保证在默认设置下，即使仅仅是在试图执行一个写操作之前，主分片都会要求 必须要有 规定数量(quorum)的分片副本处于活跃可用状态，才会去执行写操作(其中分片副本可以是主分片或者副本分片)。这是为了避免在发生网络分区故障（network partition）的时候进行写操作，进而导致数据不一致。规定数量即：1int( (primary + number_of_replicas) / 2 ) + 1 consistency可以设置为以下几种值： one : 只要主分片状态ok就可以执行写的操作。all : 必须要所有的主分片和副分片状态正确才允许执行写操作。quorum : 满足规定数量的副分片状态ok才执行写操作。]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch-冲突处理]]></title>
-    <url>%2F2017%2F08%2F21%2Felasticsearch-%E5%86%B2%E7%AA%81%E5%A4%84%E7%90%86%2F</url>
-    <content type="text"><![CDATA[ES冲突处理和版本控制&ensp;&ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似： web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我们会认为有超过商品的实际数量的库存，因为卖给顾客的库存商品并不存在，我们将让他们非常失望。 &ensp;&ensp;变更越频繁，读数据和更新数据的间隙越长，也就越可能丢失变更。&ensp;&ensp;在数据库领域中，有两种方法通常被用来确保并发更新时变更不会丢失： 悲观并发控制&ensp;&ensp;这种方法被关系型数据库广泛使用，它假定有变更冲突可能发生，因此阻塞访问资源以防止冲突。 一个典型的例子是读取一行数据之前先将其锁住，确保只有放置锁的线程能够对这行数据进行修改。乐观并发控制&ensp;&ensp;Elasticsearch 中使用的这种方法假定冲突是不可能发生的，并且不会阻塞正在尝试的操作。 然而，如果源数据在读写当中被修改，更新将会失败。应用程序接下来将决定该如何解决冲突。 例如，可以重试更新、使用新的数据、或者将相关情况报告给用户。 乐观并发控制 – 通过version控制Elasticsearch 是分布式的。当文档创建、更新或删除时， 新版本的文档必须复制到集群中的其他节点。Elasticsearch 也是异步和并发的，这意味着这些复制请求被并行发送，并且到达目的地时也许 顺序是乱的 。 Elasticsearch 需要一种方法确保文档的旧版本不会覆盖新的版本。 每个文档都有一个 _version （版本）号，当文档被修改时版本号递增。 Elasticsearch 使用这个 _version 号来确保变更以正确顺序得到执行。如果旧版本的文档在新版本之后到达，它可以被简单的忽略。 当我们尝试通过重建文档的索引来保存修改，我们指定 version 为我们的修改会被应用的版本：12345PUT /website/blog/1?version=1 &#123; &quot;title&quot;: &quot;My first blog entry&quot;, &quot;text&quot;: &quot;Starting to get the hang of this...&quot;&#125; 然而，如果我们重新运行相同的索引请求，仍然指定 version=1 ， Elasticsearch 返回 409 Conflict HTTP 响应码1234567891011121314151617&#123; &quot;error&quot;: &#123; &quot;root_cause&quot;: [ &#123; &quot;type&quot;: &quot;version_conflict_engine_exception&quot;, &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;, &quot;index&quot;: &quot;website&quot;, &quot;shard&quot;: &quot;3&quot; &#125; ], &quot;type&quot;: &quot;version_conflict_engine_exception&quot;, &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;, &quot;index&quot;: &quot;website&quot;, &quot;shard&quot;: &quot;3&quot; &#125;, &quot;status&quot;: 409&#125;]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch-分页搜索]]></title>
-    <url>%2F2017%2F08%2F17%2Felasticsearch-%E5%88%86%E9%A1%B5%E6%90%9C%E7%B4%A2%2F</url>
-    <content type="text"><![CDATA[Elasticsearch–分页查询From&amp;Size VS scroll按照一般的查询流程来说，如果我想查询前10条数据：1，客户端请求发给某个节点2，节点转发给个个分片，查询每个分片上的前10条3，结果返回给节点，整合数据，提取前10条4，返回给请求客户端那么当我想要查询第10条到第20条的数据该怎么办呢？这个时候就用到分页查询了。 from-size”浅”分页它的原理很简单，就是查询前20条数据，然后截断前10条，只返回10-20的数据。这样其实白白浪费了前10条的查询。查询的方法:123456&#123; &quot;from&quot; : 0, &quot;size&quot; : 10, &quot;query&quot; : &#123; &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot; &#125; &#125;&#125; 其中，from定义了目标数据的偏移值，size定义当前返回的事件数目。默认from为0，size为10，即所有的查询默认仅仅返回前10条数据。 做过测试，越往后的分页，执行的效率越低。通过下图可以看出，刨去一些异常的数据，总体上还是会随着from的增加，消耗时间也会增加。而且数据量越大，效果越明显！ 也就是说，分页的偏移值越大，执行分页查询时间就会越长！scroll”深”分页相对于from和size的分页来说，使用scroll可以模拟一个传统数据的游标，记录当前读取的文档信息位置。这个分页的用法，不是为了实时查询数据，而是为了一次性查询大量的数据（甚至是全部的数据）。 因为这个scroll相当于维护了一份当前索引段的快照信息，这个快照信息是你执行这个scroll查询时的快照。在这个查询后的任何新索引进来的数据，都不会在这个快照中查询到。但是它相对于from和size，不是查询所有数据然后剔除不要的部分，而是记录一个读取的位置，保证下一次快速继续读取。&ensp;&ensp;使用的方法：123456789curl -XGET &apos;localhost:9200/twitter/tweet/_search?scroll=1m&apos; -d &apos;&#123; &quot;query&quot;: &#123; &quot;match&quot; : &#123; &quot;title&quot; : &quot;elasticsearch&quot; &#125; &#125;&#125;&apos; 测试from&amp;size VS scroll的性能初始化一个client对象：12345678910111213141516private static TransportClient client; private static String INDEX = &quot;index_name&quot;; private static String TYPE = &quot;type_name&quot;; public static TransportClient init()&#123; Settings settings = ImmutableSettings.settingsBuilder() .put(&quot;client.transport.sniff&quot;, true) .put(&quot;cluster.name&quot;, &quot;cluster_name&quot;) .build(); client = new TransportClient(settings).addTransportAddress(new InetSocketTransportAddress(&quot;localhost&quot;,9300)); return client; &#125; public static void main(String[] args) &#123; TransportClient client = init(); //这样就可以使用client执行查询了 &#125; 创建两个查询过程了 ，下面是from-size分页的执行代码：1234567891011System.out.println(&quot;from size 模式启动！&quot;);Date begin = new Date();long count = client.prepareCount(INDEX).setTypes(TYPE).execute().actionGet().getCount();SearchRequestBuilder requestBuilder = client.prepareSearch(INDEX).setTypes(TYPE).setQuery(QueryBuilders.matchAllQuery());for(int i=0,sum=0; sum&lt;count; i++)&#123; SearchResponse response = requestBuilder.setFrom(i).setSize(50000).execute().actionGet(); sum += response.getHits().hits().length; System.out.println(&quot;总量&quot;+count+&quot; 已经查到&quot;+sum);&#125;Date end = new Date();System.out.println(&quot;耗时: &quot;+(end.getTime()-begin.getTime())); 下面是scroll分页的执行代码，注意啊！scroll里面的size是相对于每个分片来说的，所以实际返回的数量是：分片的数量 x size123456789101112131415System.out.println(&quot;scroll 模式启动！&quot;);begin = new Date();SearchResponse scrollResponse = client.prepareSearch(INDEX) .setSearchType(SearchType.SCAN).setSize(10000).setScroll(TimeValue.timeValueMinutes(1)) .execute().actionGet(); count = scrollResponse.getHits().getTotalHits();//第一次不返回数据for(int i=0,sum=0; sum&lt;count; i++)&#123; scrollResponse = client.prepareSearchScroll(scrollResponse.getScrollId()) .setScroll(TimeValue.timeValueMinutes(8)) .execute().actionGet(); sum += scrollResponse.getHits().hits().length; System.out.println(&quot;总量&quot;+count+&quot; 已经查到&quot;+sum);&#125;end = new Date();System.out.println(&quot;耗时: &quot;+(end.getTime()-begin.getTime())); 可以看到仅仅30万，就相差接近一倍的性能，更何况是如今的大数据环境…因此，如果想要对全量数据进行操作，快换掉fromsize,使用scroll吧！]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch 操作]]></title>
-    <url>%2F2017%2F08%2F16%2Felasticsearch-%E6%93%8D%E4%BD%9C%2F</url>
-    <content type="text"><![CDATA[基础操作创建索引123456789PUT host:port/&#123;index&#125;&#123; &quot;settings&quot; : &#123; &quot;index&quot; : &#123; &quot;number_of_shards&quot; : 3, &quot;number_of_replicas&quot; : 1 &#125; &#125;&#125; 更新索引配置1234567PUT host:port/&#123;index&#125;/_settings&#123; &quot;index&quot; : &#123; &quot;number_of_shards&quot; : 3, &quot;number_of_replicas&quot; : 1 &#125;&#125; 删除索引1DELETE host:port/&#123;index&#125; 重建索引12345POST host:port/_reindex&#123;&quot;source&quot; : &#123;&quot;index&quot;:&quot;indexName&quot;&#125;,&quot;dest&quot; : &#123;&quot;index&quot;:&quot;new_indexName&quot;&#125;&#125; 创建索引类型映射1234567891011PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;&#123; &quot;properties&quot; : &#123; &quot;name&quot; : &#123; &quot;type&quot; : &quot;string&quot; &#125;, &quot;age&quot; : &#123; &quot;type&quot; : &quot;integer&quot; &#125; &#125;&#125; 获取索引类型字段映射1PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;/&#123;field&#125;/text 批量增加文档12345POST host:port/&#123;index&#125;/&#123;type&#125;/_bulk &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 1 &#125;&#125; &#123; &quot;title&quot;: &quot;Elasticsearch: The Definitive Guide&quot;, &quot;authors&quot;: [&quot;clinton gormley&quot;, &quot;zachary tong&quot;], &quot;summary&quot; : &quot;A distibuted real-time search and analytics engine&quot;, &quot;publish_date&quot; : &quot;2015-02-07&quot;, &quot;num_reviews&quot;: 20, &quot;publisher&quot;: &quot;oreilly&quot; &#125; &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 2 &#125;&#125; &#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125; 增加文档12PUT host:port/&#123;index&#125;/&#123;type&#125;/&#123;id 可选&#125;&#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125; 查询文档1GET host:port/&#123;index&#125;/&#123;type&#125;/&#123;id&#125; 可选参数1，{source}=false : 不返回某个字段。2，{source}include,{source}exclude : 包含或过滤其中的某些字段。3，{source} : 只查询指定的某个字段。4, _primary : 在主节点进行查询。5, _local : 尽可能在本地节点进行查询。6, refresh : 设置为true时，会在搜索操作前刷新相关的分片，保证可以及时的查询到结果。但会消耗系统的资源，除非有必要，正常情况不需要设置。7, _mget : 多文档查询 通过Url参数搜索1host:port/&#123;index&#125;/&#123;type&#125;/_search?&#123;参数&#125; sort : 对指定字段进行排序，可以指定多个，按照书写顺序优先。分页查询 ：可以通过from size组合来进行。from表示从第几行开始，size表示查询多少条文档。size的大小不能大于index.max_result_window这个参数的设置。数据量较大的时候，推荐使用scroll来查询。后续会进行分析对比。 查询DSL查询和过滤的区别 查询 ： 检查内容和条件是否匹配，计算_score元字段表示匹配度。过滤 ： 不计算匹配得分，只是单纯的决定文档是否匹配。内容过滤主要用于过滤结构化的数据。 精确查找 term : 可以用它处理数字（numbers）、布尔值（Booleans）、日期（dates）以及文本（text），term 查询会查找我们指定的精确值。 123456789101112GET /my_store/products/_search&#123; &quot;query&quot; : &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;term&quot; : &#123; &quot;price&quot; : 20 &#125; &#125; &#125; &#125;&#125; terms : 查询多个精确值 123456789101112GET /my_store/products/_search&#123; &quot;query&quot; : &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;terms&quot; : &#123; &quot;price&quot; : [20, 30] &#125; &#125; &#125; &#125;&#125; 一定要了解 term 和 terms 是 包含（contains） 操作，而非 等值（equals)&emsp;&emsp;如果我们有一个 term（词项）过滤器 { “term” : { “tags” : “search” } } ，它会与以下两个文档 同时 匹配：12&#123; &quot;tags&quot; : [&quot;search&quot;] &#125;&#123; &quot;tags&quot; : [&quot;search&quot;, &quot;open_source&quot;] &#125; 可以通过对term增加tag_count参数来确保搜索结果的一致。123456789101112131415GET /my_index/my_type/_search&#123; &quot;query&quot;: &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;bool&quot; : &#123; &quot;must&quot; : [ &#123; &quot;term&quot; : &#123; &quot;tags&quot; : &quot;search&quot; &#125; &#125;, &#123; &quot;term&quot; : &#123; &quot;tag_count&quot; : 1 &#125; &#125; ] &#125; &#125; &#125; &#125;&#125; constant_score 查询 A query that wraps another query and simply returns a constant score equal to the query boost for every document in the filter.(一个包含另一个查询的查询，只返回等于过滤器中每个文档的查询常数boost。)可以使用它来取代只有 filter 语句的 bool 查询。 12345678910&#123; &quot;query&quot;: &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot;&#125; &#125;, &quot;boost&quot; : 1.2 &#125; &#125;&#125; 范围搜索&emsp;&emsp;抛出一个问题，如何在es中实现以下sql的功能？123SELECT documentFROM productsWHERE price BETWEEN 20 AND 40 在es中，通过range查询提供包含（inclusive）和不包含（exclusive）这两种范围表达式，可供组合的选项如下： gt: &gt; 大于（greater than）lt: &lt; 小于（less than）gte: &gt;= 大于或等于（greater than or equal to）lte: &lt;= 小于或等于（less than or equal to） 123456789101112131415GET /my_store/products/_search&#123; &quot;query&quot; : &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;range&quot; : &#123; &quot;price&quot; : &#123; &quot;gte&quot; : 20, &quot;lt&quot; : 40 &#125; &#125; &#125; &#125; &#125;&#125; 组合过滤器&emsp;&emsp;抛出个问题，怎样用 Elasticsearch 来表达下面的 SQL ？1234SELECT productFROM productsWHERE (price = 20 OR productID = &quot;XHDK-A-1293-#fJ3&quot;)AND (price != 30) 布尔过滤器&emsp;&emsp;一个 bool 过滤器由三部分组成：1234567&#123; &quot;bool&quot; : &#123; &quot;must&quot; : [], //与AND等价 &quot;should&quot; : [], //与OR等价 &quot;must_not&quot; : [], //与NOT等价 &#125;&#125; bool 查询采取 more-matches-is-better 匹配越多越好的方式，所以每条 match 语句的评分结果会被加在一起，从而为每个文档提供最终的分数 _score .看一个例子： 1234567891011121314151617GET /_search&#123; &quot;query&quot;: &#123; &quot;bool&quot;: &#123; &quot;should&quot;: [ &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;War and Peace&quot; &#125;&#125;, &#123; &quot;match&quot;: &#123; &quot;author&quot;: &quot;Leo Tolstoy&quot; &#125;&#125;, &#123; &quot;bool&quot;: &#123; &quot;should&quot;: [ &#123; &quot;match&quot;: &#123; &quot;translator&quot;: &quot;Constance Garnett&quot; &#125;&#125;, &#123; &quot;match&quot;: &#123; &quot;translator&quot;: &quot;Louise Maude&quot; &#125;&#125; ] &#125;&#125; ] &#125; &#125;&#125; 为什么将译者条件语句放入另一个独立的 bool 查询中呢？所有的四个 match 查询都是 should 语句，所以为什么不将 translator 语句与其他如 title 、 author 这样的语句放在同一层呢？ 答案在于评分的计算方式。 bool 查询运行每个 match 查询，再把评分加在一起，然后将结果与所有匹配的语句数量相乘，最后除以所有的语句数量。处于同一层的每条语句具有相同的权重。在前面这个例子中，包含 translator 语句的 bool 查询，只占总评分的三分之一。如果将 translator 语句与 title 和 author 两条语句放入同一层，那么 title 和 author 语句只贡献四分之一评分。 dis_max查询 分离最大化查询 ：返回任一与查询匹配的文档，但只将最佳匹配的评分作为查询的评分结果。 12345678910&#123; &quot;query&quot;: &#123; &quot;dis_max&quot;: &#123; &quot;queries&quot;: [ &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;Brown fox&quot; &#125;&#125;, &#123; &quot;match&quot;: &#123; &quot;body&quot;: &quot;Brown fox&quot; &#125;&#125; ] &#125; &#125;&#125; dis_max只会简单的使用单个最佳匹配语句的评分作为整体评分，可以增加一个tie_breaker这个参数将其他匹配语句的评分也考虑其中。 tie_breaker 参数提供了一种 dis_max 和 bool 之间的折中选择，它的评分方式如下： 1, 获得最佳匹配语句的评分 _score 。 2, 将其他匹配语句的评分结果与 tie_breaker 相乘。 3, 对以上评分求和并规范化。 多字段查询当需要在多个字段进行相同的查询时，可以使用multi_match查询123456789&#123; &quot;multi_match&quot;: &#123; &quot;query&quot;: &quot;Quick brown fox&quot;, &quot;type&quot;: &quot;best_fields&quot;, &quot;fields&quot;: [ &quot;title_*&quot;, &quot;body^2&quot; ], &quot;tie_breaker&quot;: 0.3, &quot;minimum_should_match&quot;: &quot;30%&quot; &#125;&#125; 1，字段可以通过通配符来指定，如 “title_*”.2，字段可以用^加权，表示字段的重要性，在评分的时候做为加权。3，type字段支持best_fields,most_fields,cross_fields,phrase,phrase_prefix等多种。 best_fields:(默认)查找匹配任何字段的文档，但是使用最佳匹配字段的评分。 most_fields:查找匹配任何字段的文档，结合每个字段的评分。 cross_fields:例如通过first_name和last_name字段查询“will smith”的时候，最佳的匹配是will出现在一个字段，smith出现在另一个字段。 phrase:在每个字段上运行短语匹配查询，结合每个字段的得分。 phrase_prefix:在每个字段上运行短语前缀匹配查询。 null处理在Es中，null, []空数组 和 [null] 所有这些都是等价的，它们无法存于倒排索引中。 exists 存在查询12345678910111213141516GET /my_index/posts/_search&#123; &quot;query&quot; : &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;exists&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125; &#125; &#125; &#125;&#125;等价于SELECT tagsFROM postsWHERE tags IS NOT NULL missing 缺失查询12345678910111213141516GET /my_index/posts/_search&#123; &quot;query&quot; : &#123; &quot;constant_score&quot; : &#123; &quot;filter&quot; : &#123; &quot;missing&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125; &#125; &#125; &#125;&#125;等价于SELECT tagsFROM postsWHERE tags IS NULL minimum_should_match 通过此参数控制最少需要匹配的should语句的数量，可以为数字或百分比。12345678910111213GET /my_index/my_type/_search&#123; &quot;query&quot;: &#123; &quot;bool&quot;: &#123; &quot;should&quot;: [ &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;brown&quot; &#125;&#125;, &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;fox&quot; &#125;&#125;, &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;dog&quot; &#125;&#125; ], &quot;minimum_should_match&quot;: 2 &#125; &#125;&#125;]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[elasticsearch 基础]]></title>
-    <url>%2F2017%2F08%2F16%2Felasticsearch-basic%2F</url>
-    <content type="text"><![CDATA[elasticsearch几个重要的概念cluster 代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。 node 组成集群的每一个服务器称之为节点。 shards 代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的： 1，增加高可用性。 2，提高性能。 replicas 代表索引副本，es可以设置多个索引的副本，副本的作用一是提高系统的容错性，当个某个节点某个分片损坏或丢失时可以从副本中恢复。二是提高es的查询效率，es会自动对搜索请求进行负载均衡。 recovery 代表数据恢复或叫数据重新分布，es在有节点加入或退出时会根据机器的负载对索引分片进行重新分配，挂掉的节点重新启动时也会进行数据恢复。 gateway 代表es索引的持久化存储方式，es默认是先把索引存放到内存中，当内存满了时再持久化到硬盘。当这个es集群关闭再重新启动时就会从gateway中读取索引数据。es支持多种类型的gateway，有本地文件系统（默认），分布式文件系统，Hadoop的HDFS和amazon的s3云存储服务。 index／type／document 索引，具有相同结构的文档集合。对应关系数据库的databases.类型，在索引中，可以定义一个或多个类型，类型是索引的逻辑分区。对应关系数据库的table。文档，真正存储的数据内容。对应关系数据库的一行记录。]]></content>
-      <categories>
-        <category>elasticsearch</category>
-      </categories>
-      <tags>
-        <tag>elasticsearch</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[容器扩展点]]></title>
-    <url>%2F2017%2F08%2F14%2Fspring-extendion%2F</url>
-    <content type="text"><![CDATA[通过BeanPostProcessor定制Bean&#8194;&#8194;&#8194;&#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。&#8194;&#8194;&#8194;&#8194;可以配置多个BeanPostProcessor实例，通过设置order属性来控制这些BeanPostProcessors执行的顺序。 BeanPostProcessor作用在一个bean(或者对象)的实例上;也就是说，Spring IoC实例化一个bean实例之后， BeanPostProcessor，才开始进行处理。 BeanPostProcessor作用范围是每一个容器。这仅仅和你正在使用容器有关。如果你在一个容器中定义了一个BeanPostProcessor ，它将仅仅后置处理那个容器中的beans。换言之，一个容器中的beans不会被另一个容器中的BeanPostProcessor处理，即使这两个容器，具有相同的父类。&#8194;&#8194;&#8194;&#8194;ApplicationContext会自动地检测所有定义在配置元文件中，并实现了BeanPostProcessor接口的bean。该ApplicationContext注册这些beans作为后置处理器，使他们可以在bean创建完成之后被调用。bean后置处理器可以像其他bean一样部署到容器中。实现了BeanPostProcessor接口的类是特殊的,会被容器特殊处理。所有BeanPostProcessors和他们直接引用的 beans都会在容器启动的时候被实例化,作为ApplicationContext特殊启动阶段的一部分。 通过BeanFactoryPostProcessor定制Bean&#8194;&#8194;&#8194;&#8194;与BeanPostProcessor类似，但有一个主要的不同点：BeanFactoryPostProcessor操作bean的配置元数据；也就是说，Spring的IoC容器允许 BeanFactoryPostProcessor来读取配置元数据并在容器实例化任何bean(除了BeanFactoryPostProcessor)之前可以修改它。]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
-      <tags>
-        <tag>spring</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[spring-applicationContext]]></title>
-    <url>%2F2017%2F08%2F11%2Fspring-applicationContext%2F</url>
-    <content type="text"><![CDATA[ApplicationContextbeanFactory和ApplicationContext的区别 &#8194;&#8194;&#8194;&#8194;BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。&#8194;&#8194;&#8194;&#8194;ApplicationContext接口,它由BeanFactory接口派生而来，因而提供BeanFactory所有的功能。ApplicationContext以一种更向面向框架的方式工作以及对上下文进行分层和实现继承，ApplicationContext包还提供了以下的功能： MessageSource, 提供国际化的消息访问 资源访问，如URL和文件: ApplicationContext扩展了ResourceLoader(资源加载器)接口，从而可以用来加载多个Resource，而BeanFactory是没有扩展ResourceLoader. 事件传播 载入多个（有继承关系）上下文 ，使得每一个上下文都专注于一个特定的层次，比如应用的web层.&#8194;&#8194;BeanFactroy采用的是延迟加载形式来注入Bean的，即只有在使用到某个Bean时(调用getBean())，才对该Bean进行加载实例化，这样，我们就不能发现一些存在的Spring的配置问题。而ApplicationContext则相反，它是在容器启动时，一次性创建了所有的Bean。这样，在容器启动时，我们就可以发现Spring中存在的配置错误。&#8194;&#8194;BeanFactory和ApplicationContext都支持BeanPostProcessor、BeanFactoryPostProcessor的使用，但两者之间的区别是：BeanFactory需要手动注册，而ApplicationContext则是自动注册 功能扩展123456789101112131415161718192021222324252627282930313233343536373839404142434445464748protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) &#123; // 设置类加载器为当前加载器 beanFactory.setBeanClassLoader(getClassLoader()); // 增加对el表达式的支持 beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader())); // 增加bean的属性编辑.例如Bean的属性为Date类型时，无法直接注入，则需要使用自定义的属性编辑器 beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this, getEnvironment())); // 添加BeanPostProcessor beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this)); // 设置几个忽略自动装配的接口 beanFactory.ignoreDependencyInterface(EnvironmentAware.class); beanFactory.ignoreDependencyInterface(EmbeddedValueResolverAware.class); beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class); beanFactory.ignoreDependencyInterface(ApplicationEventPublisherAware.class); beanFactory.ignoreDependencyInterface(MessageSourceAware.class); beanFactory.ignoreDependencyInterface(ApplicationContextAware.class); // 注册依赖的类，一旦检测到属性为BeanFactory类型便会将beanFactory的实例注册进去 beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory); beanFactory.registerResolvableDependency(ResourceLoader.class, this); beanFactory.registerResolvableDependency(ApplicationEventPublisher.class, this); beanFactory.registerResolvableDependency(ApplicationContext.class, this); // Register early post-processor for detecting inner beans as ApplicationListeners. beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(this)); // 增加对AspectJ的支持 if (beanFactory.containsBean(LOAD_TIME_WEAVER_BEAN_NAME)) &#123; beanFactory.addBeanPostProcessor(new LoadTimeWeaverAwareProcessor(beanFactory)); // Set a temporary ClassLoader for type matching. beanFactory.setTempClassLoader(new ContextTypeMatchClassLoader(beanFactory.getBeanClassLoader())); &#125; // Register default environment beans. if (!beanFactory.containsLocalBean(ENVIRONMENT_BEAN_NAME)) &#123; beanFactory.registerSingleton(ENVIRONMENT_BEAN_NAME, getEnvironment()); &#125; if (!beanFactory.containsLocalBean(SYSTEM_PROPERTIES_BEAN_NAME)) &#123; beanFactory.registerSingleton(SYSTEM_PROPERTIES_BEAN_NAME, getEnvironment().getSystemProperties()); &#125; if (!beanFactory.containsLocalBean(SYSTEM_ENVIRONMENT_BEAN_NAME)) &#123; beanFactory.registerSingleton(SYSTEM_ENVIRONMENT_BEAN_NAME, getEnvironment().getSystemEnvironment()); &#125; &#125; BeanFactoryPostProcessor 容器级别的Bean扩展器 BeanFactoryPostProcessor的作用域范围是容器级的，仅对容器中的Bean进行后置处理。比较典型的几种 1， PropertyPlaceholderConfigurer : 对容器中的所有引用的属性值替换 1234567891011121314 public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException &#123; try &#123; Properties mergedProps = mergeProperties(); // Convert the merged properties, if necessary. convertProperties(mergedProps); // Let the subclass process the properties. processProperties(beanFactory, mergedProps); &#125; catch (IOException ex) &#123; throw new BeanInitializationException(&quot;Could not load properties&quot;, ex); &#125;&#125; 2， BeanDefinitionRegistryPostProcessor： 对BeanDefinition进行一些后置的自定义操作 123456789101112131415161718192021 import org.springframework.beans.BeansException; import org.springframework.beans.factory.support.BeanDefinitionRegistry; import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor; import org.springframework.beans.factory.support.RootBeanDefinition; import org.springframework.stereotype.Component; @Componentpublic class CustomServiceRegistryPostProcessor implements BeanDefinitionRegistryPostProcessor &#123; @Override public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException &#123; RootBeanDefinition beanDefinition = new RootBeanDefinition(MyServiceImpl.class); //Service实现 serviceDefinition.setTargetType(MyService.class); //Service接口 serviceDefinition.setRole(BeanDefinition.ROLE_APPLICATION); registry.registerBeanDefinition(&quot;myBeanName&quot;, beanDefinition ); &#125;&#125; 应用 在Mybatis与Spring的整合中，就利用到了BeanDefinitionRegistryPostProcessor来对Mapper的BeanDefinition进行了后置的自定义处理。 在Spring的配置文件中，我们会配置以下代码来扫描Mapper：1234&lt;bean class=&quot;org.mybatis.spring.mapper.MapperScannerConfigurer&quot;&gt; &lt;property name=&quot;basePackage&quot; value=&quot;com.rason.nba.mapper&quot; /&gt; &lt;property name=&quot;sqlSessionFactoryBeanName&quot; value=&quot;sqlSessionFactory&quot;&gt;&lt;/property&gt;&lt;/bean&gt; 其中org.mybatis.spring.mapper.MapperScannerConfigurer类就实现了BeanDefinitionRegistryPostProcessor接口来对Mapper进行自定义的注册操作。1234567891011121314151617181920212223// 代码有删减public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProcessor&#123; public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException &#123; ClassPathMapperScanner scanner = new ClassPathMapperScanner(registry); scanner.scan(StringUtils.tokenizeToStringArray(this.basePackage, &#125;&#125;public class ClassPathMapperScanner extends ClassPathBeanDefinitionScanner &#123; @Override public Set&lt;BeanDefinitionHolder&gt; doScan(String... basePackages) &#123; Set&lt;BeanDefinitionHolder&gt; beanDefinitions = super.doScan(basePackages);//首先调用Spring默认的扫描装配操作 if (beanDefinitions.isEmpty()) &#123; &#125; else &#123; for (BeanDefinitionHolder holder : beanDefinitions) &#123;//然后循环对每一个BeanDefinition进行一些自定义的操作 GenericBeanDefinition definition = (GenericBeanDefinition) holder.getBeanDefinition(); definition.getPropertyValues().add(&quot;mapperInterface&quot;, definition.getBeanClassName()); definition.setBeanClass(MapperFactoryBean.class); definition.getPropertyValues().add(&quot;addToConfig&quot;, this.addToConfig); &#125; &#125; &#125;&#125;]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
-      <tags>
-        <tag>spring</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[spring annotation]]></title>
-    <url>%2F2017%2F08%2F11%2Fspring-annotation%2F</url>
-    <content type="text"><![CDATA[常用的Bean相关的注解@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。@PostConstruct、@PreDestroy — 指定生命周期回调方法，分别对应init-method 和 destroy-method 属性。@Required — 对bean的依赖进行检查。 标签提供了 dependency-check 属性用于进行依赖检查。该属性的取值包括以下几种： none – 默认不执行依赖检查。可以在 标签上使用 * default-dependency-check 属性改变默认值。 simple – 对原始基本类型和集合类型进行检查。 objects – 对复杂类型进行检查（除了 simple 所检查类型之外的其他类型）。 all – 对所有类型进行检查。 @Resource、@Autowired — Bean的自动装配策略。 no – 显式指定不使用自动装配。 byName – 如果存在一个和当前属性名字一致的 Bean，则使用该 Bean 进行注入。如果名称匹配但是类型不匹配，则抛出异常。如果没有匹配的类型，则什么也不做。 byType – 如果存在一个和当前属性类型一致的 Bean ( 相同类型或者子类型 )，则使用该 Bean 进行注入。byType 能够识别工厂方法，即能够识别 factory-method 的返回类型。如果存在多个类型一致的 Bean，则抛出异常。如果没有匹配的类型，则什么也不做。 constructor – 与 byType 类似，只不过它是针对构造函数注入而言的。如果当前没有与构造函数的参数类型匹配的 Bean，则抛出异常。使用该种装配模式时，优先匹配参数最多的构造函数。 autodetect – 根据 Bean 的自省机制决定采用 byType 还是 constructor 进行自动装配。如果 Bean 提供了默认的构造函数，则采用 byType；否则采用 constructor 进行自动装配。两者的区别 @Autowired and @Inject1, Matches by Type2, Restricts by Qualifiers3, Matches by Name@Resource1, Matches by Name2, Matches by Type3, Restricts by Qualifiers (ignored if match is found by name)‘@Autowired’ 和‘@Inject’的报错信息完全相同，他们都是通过 ‘AutowiredAnnotationBeanPostProcessor’ 类实现的依赖注入，二者具有可互换性。‘@Resource’通过 ‘CommonAnnotationBeanPostProcessor’ 类实现依赖注入]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
-      <tags>
-        <tag>spring</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title><![CDATA[spring bean 加载流程]]></title>
-    <url>%2F2017%2F08%2F10%2Fspring%2F</url>
-    <content type="text"><![CDATA[几个重要的类 ResourceLoader: 资源加载器，根据给定的资源文件地址，返回对应的Resource。常用的有ClassPathResource,UrlResource,FileSystemResource. DocumentLoader: 定义从资源文件加载到转换为document的功能。 BeanDefinitionReader: 定义资源文件的读取并转化为BeanDefinition的功能。 DefaultBeanDefinitionDocumentReader：定义读取document并注册beanDefinition的功能。 BeanDefinitionParseDelegate: 定义解析element的各种方法。 BeanDefinitionRegistry: 定义对beanDefinition的各种增删改查的操作。 BeanDefinition: 对应配置文件中的一个bean标签,包含多种属性，例如className,lookUp,lazyInit,dependsOn,FactoryMethod Bean初始化的流程 从配置文件到bean的注册 1，资源文件的读取（ResourceLoader，DocumentLoader） 2，转化为beanDefinition对象（BeanDefinitionReader，DefaultBeanDefinitionDocumentReader，BeanDefinitionParseDelegate） 3，将bean注册到容器中（BeanDefinitionRegistry） Bean的加载spring如何解决依赖注入的循环依赖问题 通过构造器注入构成的循环依赖，此依赖是无法解决的，只能抛出BeanCurrentlyInCreationException异常表示循环依赖。对于setter注入造成的依赖是通过Spring容器提前暴露刚完成构造器注入但未完成其他步骤（如setter注入）的Bean来完成的，而且只能解决单例作用域的Bean循环依赖。 1、Spring容器创建单例“circleA” Bean，首先根据无参构造器创建Bean，并暴露一个“ObjectFactory ”用于返回一个提前暴露一个创建中的Bean，并将“circleA” 标识符放到“当前创建Bean池”；然后进行setter注入“circleB”；2、Spring容器创建单例“circleB” Bean，首先根据无参构造器创建Bean，并暴露一个“ObjectFactory”用于返回一个提前暴露一个创建中的Bean，并将“circleB” 标识符放到“当前创建Bean池”，然后进行setter注入“circleC”；3、Spring容器创建单例“circleC” Bean，首先根据无参构造器创建Bean，并暴露一个“ObjectFactory ”用于返回一个提前暴露一个创建中的Bean，并将“circleC” 标识符放到“当前创建Bean池”，然后进行setter注入“circleA”；进行注入“circleA”时由于提前暴露了“ObjectFactory”工厂从而使用它返回提前暴露一个创建中的Bean；4、最后在依赖注入“circleB”和“circleA”，完成setter注入。 对于“prototype”作用域Bean，Spring容器无法完成依赖注入，因为“prototype”作用域的Bean，Spring容器不进行缓存，因此无法提前暴露一个创建中的Bean。 在Bean加载过程中涉及的几种map singletonObjects: 用于保存beanName和创建的Bean实例之间的关系。 singletonFactories: 用于保存beanName和创建bean的工厂之间的关系。 earlySingletonObjects: 保存beanName和创建的bean实例之间的关系，与singletonObjects不同在于当一个bean被放入此map中时，即使还处于创建过程中，也可以通过getBean方法获取，主要用于检测循环依赖。 registeredSingletons：用于保存当前所有已注册的bean. 使用FactoryBean&#8194;&#8194;&#8194;&#8194;跟普通Bean不同，其返回的对象不是指定类的一个实例，其返回的是该FactoryBean的getObject方法所返回的对象。在Spring框架内部，有很多地方有FactoryBean的实现类，它们在很多应用如(Spring的AOP、ORM、事务管理)及与其它第三框架(ehCache)集成时都有体现. FactoryBean接口有3个方法：&#8194;&#8194;&#8194;&#8194;Object getObject():返回本工厂创建的对象实例。此实例也许是共享的，依赖于该工厂返回的是单例或者是原型。&#8194;&#8194;&#8194;&#8194;boolean isSingleton():如果FactoryBean返回的是单例,该方法返回值为true,否则为false&#8194;&#8194;&#8194;&#8194;Class getObjectType():返回对象类型。对象类型是getObject()方法返回的对象的类型，如果不知道的类型则返回null。 FactoryBean概念和接口在Spring框架中大量使用。Spring内置的有超过50个实现。&#8194;&#8194;&#8194;&#8194;当使用ApplicationContext的getBean()方法获取FactoryBean实例本身而不是它所产生的bean，则要使用&amp;符号+id。比如，现有FactoryBean，它有id，在容器上调用getBean(“myBean”)将返回FactoryBean所产生的bean，调用getBean(“&amp;myBean”)将返回FactoryBean它本身的实例。 Bean的创建creatBean&#8194;&#8194;&#8194;&#8194;在创建Bean对象时，如果没有需要覆盖的方法（beanDefinition.getMethodOverrides()为空，则默认使用反射的方式创建对象。如果有需要覆盖的方法，则需要使用动态代理的方式来实现。12345678910111213141516171819202122232425262728293031323334353637public Object instantiate(RootBeanDefinition bd, String beanName, BeanFactory owner) &#123; // Don&apos;t override the class with CGLIB if no overrides. if (bd.getMethodOverrides().isEmpty()) &#123; Constructor&lt;?&gt; constructorToUse; synchronized (bd.constructorArgumentLock) &#123; constructorToUse = (Constructor&lt;?&gt;) bd.resolvedConstructorOrFactoryMethod; if (constructorToUse == null) &#123; final Class&lt;?&gt; clazz = bd.getBeanClass(); if (clazz.isInterface()) &#123; throw new BeanInstantiationException(clazz, &quot;Specified class is an interface&quot;); &#125; try &#123; if (System.getSecurityManager() != null) &#123; constructorToUse = AccessController.doPrivileged(new PrivilegedExceptionAction&lt;Constructor&lt;?&gt;&gt;() &#123; @Override public Constructor&lt;?&gt; run() throws Exception &#123; return clazz.getDeclaredConstructor((Class[]) null); &#125; &#125;); &#125; else &#123; constructorToUse = clazz.getDeclaredConstructor((Class[]) null); &#125; bd.resolvedConstructorOrFactoryMethod = constructorToUse; &#125; catch (Throwable ex) &#123; throw new BeanInstantiationException(clazz, &quot;No default constructor found&quot;, ex); &#125; &#125; &#125; return BeanUtils.instantiateClass(constructorToUse); &#125; else &#123; // Must generate CGLIB subclass. return instantiateWithMethodInjection(bd, beanName, owner); &#125; &#125; populateBean 设置Bean属性注入&#8194;&#8194;&#8194;&#8194;Spring IoC容器根据Bean名称或者类型进行autowiring自动依赖注入 123456789101112131415161718protected void populateBean(String beanName, AbstractBeanDefinition mbd, BeanWrapper bw) &#123; //获取Bean定义的属性值，并对属性值进行处理 PropertyValues pvs = mbd.getPropertyValues(); …… //对依赖注入处理，首先处理autowiring自动装配的依赖注入 if (mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_NAME || mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_TYPE) &#123; MutablePropertyValues newPvs = new MutablePropertyValues(pvs); //根据Bean名称进行autowiring自动装配处理 if (mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_NAME) &#123; autowireByName(beanName, mbd, bw, newPvs); &#125; //根据Bean类型进行autowiring自动装配处理 if (mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_TYPE) &#123; autowireByType(beanName, mbd, bw, newPvs); &#125; &#125; //对非autowiring的属性进行依赖注入处理 initializeBean 初始化Bean12345678910111213141516171819202122232425262728293031323334353637383940protected Object initializeBean(final String beanName, final Object bean, RootBeanDefinition mbd) &#123; if (System.getSecurityManager() != null) &#123; AccessController.doPrivileged(new PrivilegedAction&lt;Object&gt;() &#123; @Override public Object run() &#123; invokeAwareMethods(beanName, bean); return null; &#125; &#125;, getAccessControlContext()); &#125; else &#123; //实现Aware接口，注入感知的对象 invokeAwareMethods(beanName, bean); &#125; Object wrappedBean = bean; //实现BeanPostProcessor,应用postProcessBeforeInitialization方法。 //在Bean的初始化前提供回调入口 if (mbd == null || !mbd.isSynthetic()) &#123; wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName); &#125; try &#123; //应用配置的init-method方法 invokeInitMethods(beanName, wrappedBean, mbd); &#125; catch (Throwable ex) &#123; throw new BeanCreationException( (mbd != null ? mbd.getResourceDescription() : null), beanName, &quot;Invocation of init method failed&quot;, ex); &#125; //实现BeanPostProcessor,应用postProcessBeforeInitialization方法。 //在Bean的初始化之后提供回调入口 if (mbd == null || !mbd.isSynthetic()) &#123; wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName); &#125; return wrappedBean; &#125; 上一张图]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
-      <tags>
-        <tag>spring</tag>
-      </tags>
-  </entry>
+<search> 
+  
+    
+    <entry>
+      <title><![CDATA[elasticsearch 存储模型与读写操作]]></title>
+      <url>/2017/08/31/elasticsearch-%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AF%BB%E5%86%99%E6%93%8D%E4%BD%9C/</url>
+      <content type="html"><![CDATA[<h1 id="分辨es索引和lucene索引"><a href="#分辨es索引和lucene索引" class="headerlink" title="分辨es索引和lucene索引"></a>分辨es索引和lucene索引</h1><blockquote>
+<p>Elasticsearch中的索引是组织数据的逻辑空间(就好比数据库)。1个Elasticsearch的索引有1个或者多个分片(默认是5个)。分片对应实际存储数据的Lucene的索引，分片自身就是一个搜索引擎。每个分片有0或者多个副本(默认是1个)。Elasticsearch的索引还包含”type”(就像数据库中的表)，用于逻辑上隔离索引中的数据。在Elasticsearch的索引中，给定一个type，它的所有文档会拥有相同的属性(就像表的schema)。</p>
+</blockquote>
+<p><img src="../images/es索引.jpeg" alt=""></p>
+<h1 id="节点类型"><a href="#节点类型" class="headerlink" title="节点类型"></a>节点类型</h1><ul>
+<li>Master Eligible Node （候选主节点）：设置成node.master=true (default)都可能会被选举为主节点；</li>
+<li>Master Node （主节点）：由候选主节点选举出来的，负责管理 ES 集群，通过广播的机制与其他节点维持关系，负责集群中的 DDL 操作（创建/删除索引），管理其他节点上的分片（shard）；<blockquote>
+<p>Tips: 关于 Master 脑裂问题。候选主节点之间出现了网络分区则可能会出现集群脑裂的情况，导致数据不一致或者数据丢失。我们可以通过设置discovery.zen.minimum_master_nodes设置为(master_eligible_nodes / 2) + 1将避免掉这个问题，弊端就是当候选主节点数由于宕机等不确定因素导致少于(master_eligible_nodes / 2) + 1的话，集群将无法正常运作下去.</p>
+</blockquote>
+</li>
+<li>Data Node（数据节点）：很好理解，存放数据的节点，负责数据的增删改查 CRUD；</li>
+<li>Ingest Node（提取节点）：能执行预处理管道，有自己独立的任务要执行，类似于 logstash 的功能，不负责数据也不负责集群相关的事务；通过node.ingest配置。</li>
+<li>Tribe Node（部落节点）：协调集群与集群之间的节点。</li>
+<li>Coordinating Node(协调节点)：每一个节点都是一个潜在的协调节点，且不能被禁用，协调节点最大的作用就是将各个分片里的数据汇集起来一并返回给客户端，因此 ES 的节点需要有足够的 CPU 和内存去处理协调节点的 gather 阶段。</li>
+</ul>
+<h1 id="Transport-Client-与-Node-Client"><a href="#Transport-Client-与-Node-Client" class="headerlink" title="Transport Client 与 Node Client"></a>Transport Client 与 Node Client</h1><p>如果你使用的是 Java，你可能想知道何时使用传输客户端（注：Transport Client，下同）与节点客户端（注：Node Client，下同）。 在书的开头所述， 传输客户端作为一个集群和应用程序之间的通信层。它知道 API 并能自动帮你在节点之间轮询，帮你嗅探集群等等。但它是集群 外部的 ，和 REST 客户端类似。</p>
+<p>另一方面，节点客户端，实际上是一个集群中的节点（但不保存数据，不能成为主节点）。因为它是一个节点，它知道整个集群状态（所有节点驻留，分片分布在哪些节点，等等）。 这意味着它可以执行 APIs 但少了一个网络跃点。</p>
+<blockquote>
+<p>这里有两个客户端案例的使用情况：</p>
+<p>如果要将应用程序和 Elasticsearch 集群进行解耦，传输客户端是一个理想的选择。例如，如果您的应用程序需要快速的创建和销毁到集群的连接，传输客户端比节点客户端”轻”，因为它不是一个集群的一部分。</p>
+<p>类似地，如果您需要创建成千上万的连接，你不想有成千上万节点加入集群。传输客户端（ TC ）将是一个更好的选择。</p>
+<p>另一方面，如果你只需要有少数的、长期持久的对象连接到集群，客户端节点可以更高效，因为它知道集群的布局。但是它会使你的应用程序和集群耦合在一起，所以从防火墙的角度，它可能会构成问题。</p>
+</blockquote>
+<h1 id="存储模型"><a href="#存储模型" class="headerlink" title="存储模型"></a>存储模型</h1><p>我们来看下如下2个文档是如何被倒排索引的：</p>
+<p>文档1(Doc 1): Insight Data Engineering Fellows Program<br>文档2(Doc 2): Insight Data Science Fellows Program</p>
+<p>如果我们想找包含词项”insight”的文档，我们可以扫描这个(单词有序的)倒排索引，找到”insight”并返回包含改词的文档ID，示例中是Doc 1和Doc 2。<br><img src="../images/倒排索引.JPG" alt=""></p>
+<p>为了提高可检索性(比如希望大小写单词都返回)，我们应当先分析文档再对其索引。分析包括2个部分：</p>
+<p>将句子词条化为独立的单词<br>将单词规范化为标准形式<br>默认情况下，Elasticsearch使用标准分析器，它使用了：</p>
+<p>标准分词器以单词为界来切词<br>小写词条(token)过滤器来转换单词</p>
+<h1 id="剖析写操作"><a href="#剖析写操作" class="headerlink" title="剖析写操作"></a>剖析写操作</h1><h2 id="创建-C-reate"><a href="#创建-C-reate" class="headerlink" title="创建((C)reate)"></a>创建((C)reate)</h2><p>当我们发送索引一个新文档的请求到协调节点后，将发生如下一组操作：</p>
+<ul>
+<li>Elasticsearch集群中的每个节点都包含了改节点上分片的元数据信息。协调节点(默认)使用文档ID参与计算，以便为路由提供合适的分片。Elasticsearch使用shard = hash(document_id) % (num_of_primary_shards)函数对文档ID进行哈希，其结果再对分片数量取模，得到的结果即是索引文档的分片。</li>
+<li>当分片所在的节点接收到来自协调节点的请求后，会将该请求写入translog(我们将在本系列接下来的文章中讲到)，并将文档加入内存缓冲。如果请求在主分片上成功处理，该请求会并行发送到该分片的副本上。当translog被同步(fsync)到全部的主分片及其副本上后，客户端才会收到确认通知。</li>
+<li>内存缓冲会被周期性刷新(默认是1秒)，内容将被写到文件系统缓存的一个新段上。虽然这个段并没有被同步(fsync)，但它是开放的，内容可以被搜索到。</li>
+<li>每30分钟，或者当translog很大的时候，translog会被清空，文件系统缓存会被同步。这个过程在Elasticsearch中称为冲洗(flush)。在冲洗过程中，内存中的缓冲将被清除，内容被写入一个新段。段的fsync将创建一个新的提交点，并将内容刷新到磁盘。旧的translog将被删除并开始一个新的translog。</li>
+</ul>
+<p><img src="../images/create.jpeg" alt=""></p>
+<h2 id="更新-U-pdate-和删除-D-elete"><a href="#更新-U-pdate-和删除-D-elete" class="headerlink" title="更新((U)pdate)和删除((D)elete)"></a>更新((U)pdate)和删除((D)elete)</h2><p>删除和更新也都是写操作。但是Elasticsearch中的文档是不可变的，因此不能被删除或者改动以展示其变更。那么，该如何删除和更新文档呢？</p>
+<ul>
+<li><p>磁盘上的每个段都有一个相应的.del文件。当删除请求发送后，文档并没有真的被删除，而是在.del文件中被标记为删除。该文档依然能匹配查询，但是会在结果中被过滤掉。当段合并(我们将在本系列接下来的文章中讲到)时，在.del文件中被标记为删除的文档将不会被写入新段。</p>
+</li>
+<li><p>接下来我们看更新是如何工作的。在新的文档被创建时，Elasticsearch会为该文档指定一个版本号。当执行更新时，旧版本的文档在.del文件中被标记为删除，新版本的文档被索引到一个新段。旧版本的文档依然能匹配查询，但是会在结果中被过滤掉。</p>
+</li>
+</ul>
+<h2 id="剖析读操作-R-ead"><a href="#剖析读操作-R-ead" class="headerlink" title="剖析读操作((R)ead)"></a>剖析读操作((R)ead)</h2><p>读操作包含2部分内容：</p>
+<ul>
+<li>查询阶段</li>
+<li>提取阶段</li>
+</ul>
+<blockquote>
+<p>查询阶段<br>在这个阶段，协调节点会将查询请求路由到索引的全部分片(主分片或者其副本)上。每个分片独立执行查询，并为查询结果创建一个优先队列，以相关性得分排序(我们将在本系列的后续文章中讲到)。全部分片都将匹配文档的ID及其相关性得分返回给协调节点。协调节点创建一个优先队列并对结果进行全局排序。会有很多文档匹配结果，但是，默认情况下，每个分片只发送前10个结果给协调节点，协调节点为全部分片上的这些结果创建优先队列并返回前10个作为hit。</p>
+<p>提取阶段<br>当协调节点在生成的全局有序的文档列表中，为全部结果排好序后，它将向包含原始文档的分片发起请求。全部分片填充文档信息并将其返回给协调节点。</p>
+</blockquote>
+<p><img src="../images/查询提取.jpeg" alt=""></p>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch 分词器]]></title>
+      <url>/2017/08/23/elasticsearch-%E5%88%86%E8%AF%8D%E5%99%A8/</url>
+      <content type="html"><![CDATA[<h1 id="索引分词器"><a href="#索引分词器" class="headerlink" title="索引分词器"></a>索引分词器</h1><h2 id="基础概念"><a href="#基础概念" class="headerlink" title="基础概念"></a>基础概念</h2><h3 id="分词器／分解器／词元过滤器"><a href="#分词器／分解器／词元过滤器" class="headerlink" title="分词器／分解器／词元过滤器"></a>分词器／分解器／词元过滤器</h3><ul>
+<li>分词器由一个分解器（tokenizer）、零个或多个词元过滤器组成。</li>
+<li>分解器前还包含有一个或多个字符过滤器（character filter），字符过滤器主要用于对查询字符串预处理，例如去除html标签，标点等。</li>
+<li>分解器用来将查询字符串分解成一系列词元。</li>
+<li>词元过滤器主要用来对分词器提取出的词元做进一步的处理，比如转小写，增加同义词等。处理后的结果称为<font color="#DC143C" size="4">索引词</font>，文档中包含几个这样的索引词被称为<font color="#DC143C" size="4">词频</font>。</li>
+</ul>
+<h2 id="默认分词器"><a href="#默认分词器" class="headerlink" title="默认分词器"></a>默认分词器</h2><p>分析器可以从三个层面进行定义：按字段（per-field）、按索引（per-index）或全局缺省（global default）。Elasticsearch 会按照以下顺序依次处理，直到它找到能够使用的分析器。</p>
+<blockquote>
+<p>索引时的顺序如下：</p>
+<ul>
+<li>字段映射里定义的 analyzer</li>
+<li>索引设置中名为 default 的分析器，默认为standard标准分析器。<br>在搜索时，顺序有些许不同：</li>
+<li>查询自己定义的 analyzer </li>
+<li>字段映射里定义的 analyzer</li>
+<li>索引设置中名为 default 的分析器，默认为standard标准分析器。</li>
+</ul>
+</blockquote>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch  一些重要的关键词和参数]]></title>
+      <url>/2017/08/23/elasticsearch-mapping/</url>
+      <content type="html"><![CDATA[<h3 id="routing-在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。"><a href="#routing-在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。" class="headerlink" title="_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。"></a>_routing : 在查询时指定路由的字段，一般查询时默认的路由值为文档的ID。</h3><blockquote>
+<p>利用自定义路由可以降低搜索的压力。仅仅将请求发送到匹配指定的分片而不是广播。</p>
+</blockquote>
+<h3 id="source-包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。"><a href="#source-包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。" class="headerlink" title="_source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。"></a>_source : 包含原始文档的json内容，本身不建立索引，只被存储。source字段会对索引产生存储开销。如果source被禁用，会造成大量功能无法使用：例如重建索引，自动修复索引等。</h3><h1 id="设置mapping时可选的参数"><a href="#设置mapping时可选的参数" class="headerlink" title="设置mapping时可选的参数"></a>设置mapping时可选的参数</h1><h3 id="analyzer"><a href="#analyzer" class="headerlink" title="analyzer"></a>analyzer</h3><blockquote>
+<p>字段指定分析器<br>analyzer : 用于索引包含连接词在内的所有索引词。<br>search_analyzer : 用于移除连接词的非短语查询。<br>search_quote_analyzer : 用于包含连接词在内的短语查询。</p>
+</blockquote>
+<h3 id="boost"><a href="#boost" class="headerlink" title="boost"></a>boost</h3><blockquote>
+<p>在索引时对一个字段指定加权值。</p>
+</blockquote>
+<h3 id="dynamic"><a href="#dynamic" class="headerlink" title="dynamic"></a>dynamic</h3><blockquote>
+<p>控制字段是否动态的添加到文档当中<br>true : 新检测到的字段会被添加到映射中（默认）。<br>false ：新检测到的字段会被忽略。<br>strict ：如果新字段被检测到，抛出异常并且文档会被丢弃。</p>
+</blockquote>
+<h3 id="ignore-above"><a href="#ignore-above" class="headerlink" title="ignore_above"></a>ignore_above</h3><blockquote>
+<p>比该值设置长的字符串不会被分词或索引。<br>lucene是字节计数的，ignore_above设置的是字符数，所以设置的最大限制为32766 ／ 3 = 10922.</p>
+</blockquote>
+<h3 id="ignore-malformed"><a href="#ignore-malformed" class="headerlink" title="ignore_malformed"></a>ignore_malformed</h3><blockquote>
+<p>默认为false,如果索引错误的数据类型时抛出异常并拒绝索引整个文档。如果设置为true,则异常会被忽略，字段不会被索引。</p>
+</blockquote>
+<h3 id="include-in-all"><a href="#include-in-all" class="headerlink" title="include_in_all"></a>include_in_all</h3><blockquote>
+<p>对每个字段进行控制是否包含在——all字段中。</p>
+</blockquote>
+<h3 id="index"><a href="#index" class="headerlink" title="index"></a>index</h3><blockquote>
+<p>控制字段如何进行索引<br>no : 字段不被索引<br>not_analyzed : 字段不被分词，直接加到索引中<br>analyzed : 默认分词再索引。</p>
+</blockquote>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch-路由和分片]]></title>
+      <url>/2017/08/21/elasticsearch-%E8%B7%AF%E7%94%B1%E5%92%8C%E5%88%86%E7%89%87/</url>
+      <content type="html"><![CDATA[<h1 id="路由一个文档到分片中"><a href="#路由一个文档到分片中" class="headerlink" title="路由一个文档到分片中"></a>路由一个文档到分片中</h1><p>当索引一个文档的时候，文档会被存储到一个主分片中。Elasticsearch 如何知道一个文档应该存放到哪个分片中呢？<br>给出一个公式：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">shard = hash(routing) % number_of_primary_shards</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>routing 是一个可变值，默认是文档的 _id ，也可以设置成一个自定义的值。 routing 通过 hash 函数生成一个数字，然后这个数字再除以 number_of_primary_shards （主分片的数量）后得到 余数 。这个分布在 0 到 number_of_primary_shards-1 之间的余数，就是我们所寻求的文档所在分片的位置。</p>
+</blockquote>
+<h2 id="主分片和副分片如何交互"><a href="#主分片和副分片如何交互" class="headerlink" title="主分片和副分片如何交互"></a>主分片和副分片如何交互</h2><p>假设有一个集群由三个节点组成。 它包含一个叫 blogs 的索引，有两个主分片，每个主分片有两个副本分片。相同分片的副本不会放在同一节点，则集群中分片的情况如下图所示：</p>
+<p><img src="../images/elas_0401.png" alt=""></p>
+<blockquote>
+<p>请求可以发送到集群中的任一节点。每个节点都有能力处理任意请求，每个节点都知道集群中任意文档的位置。所以都可以将请求转发到需要的节点上。</p>
+</blockquote>
+<p>新建、索引和删除 请求都是 写 操作， 必须在主分片上面完成之后才能被复制到相关的副本分片<br><img src="../images/elas_0402.png" alt=""><br>以下是一个索引的过程：</p>
+<blockquote>
+<p>1, 客户端向 Node 1 发送新建、索引或者删除请求。<br>  2, 节点使用文档的 _id 确定文档属于分片 0 。请求会被转发到 Node 3<code>，因为分片 0 的主分片目前被分配在</code>Node 3 上。<br>  3, Node 3 在主分片上面执行请求。如果成功了，它将请求并行转发到 Node 1 和 Node 2 的副本分片上。一旦所有的副本分片都报告成功, Node 3 将向协调节点报告成功，协调节点向客户端报告成功。<br>  在客户端收到成功响应时，文档变更已经在主分片和所有副本分片执行完成，变更是安全的。</p>
+</blockquote>
+<h3 id="获取文档"><a href="#获取文档" class="headerlink" title="获取文档"></a>获取文档</h3><p>我们可以从主分片或者从其它任意副本分片检索文档<br><img src="../images/elas_0403.png" alt=""><br>以下是从主分片或者副本分片检索文档的步骤顺序：</p>
+<blockquote>
+<p>1、客户端向 Node 1 发送获取请求。<br>2、节点使用文档的 _id 来确定文档属于分片 0 。分片 0 的副本分片存在于所有的三个节点上。 在这种情况下，它将请求转发到 Node 2 。<br>3、Node 2 将文档返回给 Node 1 ，然后将文档返回给客户端。<br>在处理读取请求时，协调结点在每次请求的时候都会通过轮询所有的副本分片来达到负载均衡。<br>  在文档被检索时，已经被索引的文档可能已经存在于主分片上但是还没有复制到副本分片。 在这种情况下，副本分片可能会报告文档不存在，但是主分片可能成功返回文档。 一旦索引请求成功返回给用户，文档在主分片和副本分片都是可用的</p>
+</blockquote>
+<h3 id="update文档"><a href="#update文档" class="headerlink" title="update文档"></a>update文档</h3><p>ES在更新文档时，其实是先搜索，再修改，最后同步到所有副本的操作。<br><img src="../images/elas_0404.png" alt=""><br>以下是部分更新一个文档的步骤：</p>
+<blockquote>
+<p>1，客户端向 Node 1 发送更新请求。<br>2，它将请求转发到主分片所在的 Node 3 。<br>3，Node 3 从主分片检索文档，修改 _source 字段中的 JSON ，并且尝试重新索引主分片的文档。 如果文档已经被另一个进程修改，它会重试步骤 3 ，超过 retry_on_conflict 次后放弃。<br>4，如果 Node 3 成功地更新文档，它将新版本的文档并行转发到 Node 1 和 Node 2 上的副本分片，重新建立索引。 一旦所有副本分片都返回成功， Node 3 向协调节点也返回成功，协调节点向客户端返回成功。</p>
+</blockquote>
+<h2 id="consistency-–-一致性保证"><a href="#consistency-–-一致性保证" class="headerlink" title="consistency – 一致性保证"></a>consistency – 一致性保证</h2><p>在默认设置下，即使仅仅是在试图执行一个<em>写</em>操作之前，主分片都会要求 必须要有 <em>规定数量(quorum)</em>的分片副本处于活跃可用状态，才会去执行<em>写</em>操作(其中分片副本可以是主分片或者副本分片)。这是为了避免在发生网络分区故障（network partition）的时候进行<em>写</em>操作，进而导致数据不一致。<em>规定数量</em>即：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">int( (primary + number_of_replicas) / 2 ) + 1</div></pre></td></tr></table></figure></p>
+<p>consistency可以设置为以下几种值：</p>
+<blockquote>
+<p>one : 只要主分片状态ok就可以执行写的操作。<br>all : 必须要所有的主分片和副分片状态正确才允许执行写操作。<br>quorum : 满足规定数量的副分片状态ok才执行写操作。</p>
+</blockquote>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch-冲突处理]]></title>
+      <url>/2017/08/21/elasticsearch-%E5%86%B2%E7%AA%81%E5%A4%84%E7%90%86/</url>
+      <content type="html"><![CDATA[<h1 id="ES冲突处理和版本控制"><a href="#ES冲突处理和版本控制" class="headerlink" title="ES冲突处理和版本控制"></a>ES冲突处理和版本控制</h1><p>&ensp;&ensp;我们对ES文档的修改，都只会存储最近的一次修改结果，之前的所有修改都会被丢失。但是在很多应用场景中，可能只是将关系数据库的数据复制到es中使其可以被搜索。有时候是不能容忍数据被丢失的。其中的一个场景和下图类似：</p>
+<p><img src="../images/elas_0301.png" alt=""></p>
+<blockquote>
+<p>web_1 对 stock_count 所做的更改已经丢失，因为 web_2 不知道它的 stock_count 的拷贝已经过期。 结果我们会认为有超过商品的实际数量的库存，因为卖给顾客的库存商品并不存在，我们将让他们非常失望。</p>
+</blockquote>
+<p>&ensp;&ensp;变更越频繁，读数据和更新数据的间隙越长，也就越可能丢失变更。<br>&ensp;&ensp;在数据库领域中，有两种方法通常被用来确保并发更新时变更不会丢失：</p>
+<blockquote>
+<p>悲观并发控制<br>&ensp;&ensp;这种方法被关系型数据库广泛使用，它假定有变更冲突可能发生，因此阻塞访问资源以防止冲突。 一个典型的例子是读取一行数据之前先将其锁住，确保只有放置锁的线程能够对这行数据进行修改。<br>乐观并发控制<br>&ensp;&ensp;Elasticsearch 中使用的这种方法假定冲突是不可能发生的，并且不会阻塞正在尝试的操作。 然而，如果源数据在读写当中被修改，更新将会失败。应用程序接下来将决定该如何解决冲突。 例如，可以重试更新、使用新的数据、或者将相关情况报告给用户。</p>
+</blockquote>
+<h2 id="乐观并发控制-–-通过version控制"><a href="#乐观并发控制-–-通过version控制" class="headerlink" title="乐观并发控制 – 通过version控制"></a>乐观并发控制 – 通过version控制</h2><p>Elasticsearch 是分布式的。当文档创建、更新或删除时， 新版本的文档必须复制到集群中的其他节点。Elasticsearch 也是异步和并发的，这意味着这些复制请求被并行发送，并且到达目的地时也许 顺序是乱的 。 Elasticsearch 需要一种方法确保文档的旧版本不会覆盖新的版本。</p>
+<font size="4" color="#DC143C">每个文档都有一个 _version （版本）号，当文档被修改时版本号递增。 Elasticsearch 使用这个 _version 号来确保变更以正确顺序得到执行。如果旧版本的文档在新版本之后到达，它可以被简单的忽略。</font>
+
+<p>当我们尝试通过重建文档的索引来保存修改，我们指定 version 为我们的修改会被应用的版本：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">PUT /website/blog/1?version=1 </div><div class="line">&#123;</div><div class="line">  &quot;title&quot;: &quot;My first blog entry&quot;,</div><div class="line">  &quot;text&quot;:  &quot;Starting to get the hang of this...&quot;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<p><font size="4" color="#DC143C">然而，如果我们重新运行相同的索引请求，仍然指定 version=1 ， Elasticsearch 返回 409 Conflict HTTP 响应码</font><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">   &quot;error&quot;: &#123;</div><div class="line">      &quot;root_cause&quot;: [</div><div class="line">         &#123;</div><div class="line">            &quot;type&quot;: &quot;version_conflict_engine_exception&quot;,</div><div class="line">            &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;,</div><div class="line">            &quot;index&quot;: &quot;website&quot;,</div><div class="line">            &quot;shard&quot;: &quot;3&quot;</div><div class="line">         &#125;</div><div class="line">      ],</div><div class="line">      &quot;type&quot;: &quot;version_conflict_engine_exception&quot;,</div><div class="line">      &quot;reason&quot;: &quot;[blog][1]: version conflict, current [2], provided [1]&quot;,</div><div class="line">      &quot;index&quot;: &quot;website&quot;,</div><div class="line">      &quot;shard&quot;: &quot;3&quot;</div><div class="line">   &#125;,</div><div class="line">   &quot;status&quot;: 409</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch-分页搜索]]></title>
+      <url>/2017/08/17/elasticsearch-%E5%88%86%E9%A1%B5%E6%90%9C%E7%B4%A2/</url>
+      <content type="html"><![CDATA[<h1 id="Elasticsearch–分页查询From-amp-Size-VS-scroll"><a href="#Elasticsearch–分页查询From-amp-Size-VS-scroll" class="headerlink" title="Elasticsearch–分页查询From&amp;Size VS scroll"></a>Elasticsearch–分页查询From&amp;Size VS scroll</h1><h3 id="按照一般的查询流程来说，如果我想查询前10条数据："><a href="#按照一般的查询流程来说，如果我想查询前10条数据：" class="headerlink" title="按照一般的查询流程来说，如果我想查询前10条数据："></a>按照一般的查询流程来说，如果我想查询前10条数据：</h3><p>1，客户端请求发给某个节点<br>2，节点转发给个个分片，查询每个分片上的前10条<br>3，结果返回给节点，整合数据，提取前10条<br>4，返回给请求客户端<br>那么当我想要查询第10条到第20条的数据该怎么办呢？这个时候就用到分页查询了。</p>
+<h2 id="from-size”浅”分页"><a href="#from-size”浅”分页" class="headerlink" title="from-size”浅”分页"></a>from-size”浅”分页</h2><p>它的原理很简单，就是查询前20条数据，然后截断前10条，只返回10-20的数据。这样其实白白浪费了前10条的查询。<br>查询的方法:<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;from&quot; : 0, &quot;size&quot; : 10,</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot; &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<p>其中，from定义了目标数据的偏移值，size定义当前返回的事件数目。<br>默认from为0，size为10，即所有的查询默认仅仅返回前10条数据。</p>
+<p>做过测试，越往后的分页，执行的效率越低。<br>通过下图可以看出，刨去一些异常的数据，总体上还是会随着from的增加，消耗时间也会增加。而且数据量越大，效果越明显！</p>
+<hr>
+<p><img src="../images/fenye.png" alt=""></p>
+<h3 id="也就是说，分页的偏移值越大，执行分页查询时间就会越长！"><a href="#也就是说，分页的偏移值越大，执行分页查询时间就会越长！" class="headerlink" title="也就是说，分页的偏移值越大，执行分页查询时间就会越长！"></a><font color="#DC143C" size="5">也就是说，分页的偏移值越大，执行分页查询时间就会越长！</font></h3><h2 id="scroll”深”分页"><a href="#scroll”深”分页" class="headerlink" title="scroll”深”分页"></a>scroll”深”分页</h2><p>相对于from和size的分页来说，使用scroll可以模拟一个传统数据的游标，记录当前读取的文档信息位置。这个分页的用法，不是为了实时查询数据，而是为了一次性查询大量的数据（甚至是全部的数据）。</p>
+<p>因为这个scroll相当于维护了一份当前索引段的快照信息，这个快照信息是你执行这个scroll查询时的快照。在这个查询后的任何新索引进来的数据，都不会在这个快照中查询到。但是它相对于from和size，不是查询所有数据然后剔除不要的部分，而是记录一个读取的位置，保证下一次快速继续读取。<br>&ensp;&ensp;使用的方法：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">curl -XGET &apos;localhost:9200/twitter/tweet/_search?scroll=1m&apos; -d &apos;</div><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;match&quot; : &#123;</div><div class="line">            &quot;title&quot; : &quot;elasticsearch&quot;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line">&apos;</div></pre></td></tr></table></figure></p>
+<h2 id="测试from-amp-size-VS-scroll的性能"><a href="#测试from-amp-size-VS-scroll的性能" class="headerlink" title="测试from&amp;size VS scroll的性能"></a>测试from&amp;size VS scroll的性能</h2><p>初始化一个client对象：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">private static TransportClient client;</div><div class="line">    private static String INDEX = &quot;index_name&quot;;</div><div class="line">    private static String TYPE = &quot;type_name&quot;;</div><div class="line">    </div><div class="line">    public static TransportClient init()&#123;</div><div class="line">        Settings settings = ImmutableSettings.settingsBuilder()</div><div class="line">                 .put(&quot;client.transport.sniff&quot;, true)</div><div class="line">                 .put(&quot;cluster.name&quot;, &quot;cluster_name&quot;)</div><div class="line">                 .build();</div><div class="line">        client = new TransportClient(settings).addTransportAddress(new InetSocketTransportAddress(&quot;localhost&quot;,9300));</div><div class="line">        return client;</div><div class="line">    &#125;</div><div class="line">    public static void main(String[] args) &#123;</div><div class="line">        TransportClient client = init();</div><div class="line">        //这样就可以使用client执行查询了</div><div class="line">    &#125;</div></pre></td></tr></table></figure></p>
+<p>创建两个查询过程了 ，下面是from-size分页的执行代码：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">System.out.println(&quot;from size 模式启动！&quot;);</div><div class="line">Date begin = new Date();</div><div class="line">long count = client.prepareCount(INDEX).setTypes(TYPE).execute().actionGet().getCount();</div><div class="line">SearchRequestBuilder requestBuilder = client.prepareSearch(INDEX).setTypes(TYPE).setQuery(QueryBuilders.matchAllQuery());</div><div class="line">for(int i=0,sum=0; sum&lt;count; i++)&#123;</div><div class="line">    SearchResponse response = requestBuilder.setFrom(i).setSize(50000).execute().actionGet();</div><div class="line">    sum += response.getHits().hits().length;</div><div class="line">    System.out.println(&quot;总量&quot;+count+&quot; 已经查到&quot;+sum);</div><div class="line">&#125;</div><div class="line">Date end = new Date();</div><div class="line">System.out.println(&quot;耗时: &quot;+(end.getTime()-begin.getTime()));</div></pre></td></tr></table></figure></p>
+<p>下面是scroll分页的执行代码，注意啊！scroll里面的size是相对于每个分片来说的，所以实际返回的数量是：<font color="#DC143C" size="3">分片的数量 x size</font><br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">System.out.println(&quot;scroll 模式启动！&quot;);</div><div class="line">begin = new Date();</div><div class="line">SearchResponse scrollResponse = client.prepareSearch(INDEX)</div><div class="line">    .setSearchType(SearchType.SCAN).setSize(10000).setScroll(TimeValue.timeValueMinutes(1)) </div><div class="line">    .execute().actionGet();  </div><div class="line">count = scrollResponse.getHits().getTotalHits();//第一次不返回数据</div><div class="line">for(int i=0,sum=0; sum&lt;count; i++)&#123;</div><div class="line">    scrollResponse = client.prepareSearchScroll(scrollResponse.getScrollId())  </div><div class="line">        .setScroll(TimeValue.timeValueMinutes(8))  </div><div class="line">    .execute().actionGet();</div><div class="line">    sum += scrollResponse.getHits().hits().length;</div><div class="line">    System.out.println(&quot;总量&quot;+count+&quot; 已经查到&quot;+sum);</div><div class="line">&#125;</div><div class="line">end = new Date();</div><div class="line">System.out.println(&quot;耗时: &quot;+(end.getTime()-begin.getTime()));</div></pre></td></tr></table></figure></p>
+<hr>
+<p><img src="../images/对比.png" alt=""></p>
+<font color="#DC143C" size="4">可以看到仅仅30万，就相差接近一倍的性能，更何况是如今的大数据环境…因此，如果想要对全量数据进行操作，快换掉fromsize,使用scroll吧！</font>]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch 操作]]></title>
+      <url>/2017/08/16/elasticsearch-%E6%93%8D%E4%BD%9C/</url>
+      <content type="html"><![CDATA[<h1 id="基础操作"><a href="#基础操作" class="headerlink" title="基础操作"></a>基础操作</h1><h3 id="创建索引"><a href="#创建索引" class="headerlink" title="创建索引"></a>创建索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;</div><div class="line">&#123;</div><div class="line">  &quot;settings&quot; : &#123;</div><div class="line">    &quot;index&quot; : &#123;</div><div class="line">     &quot;number_of_shards&quot; : 3,</div><div class="line">     &quot;number_of_replicas&quot; : 1</div><div class="line">       &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="更新索引配置"><a href="#更新索引配置" class="headerlink" title="更新索引配置"></a>更新索引配置</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_settings</div><div class="line">&#123;</div><div class="line">    &quot;index&quot; : &#123;</div><div class="line">     &quot;number_of_shards&quot; : 3,</div><div class="line">     &quot;number_of_replicas&quot; : 1</div><div class="line">       &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="删除索引"><a href="#删除索引" class="headerlink" title="删除索引"></a>删除索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">DELETE host:port/&#123;index&#125;</div></pre></td></tr></table></figure>
+<h3 id="重建索引"><a href="#重建索引" class="headerlink" title="重建索引"></a>重建索引</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">POST host:port/_reindex</div><div class="line">&#123;</div><div class="line">&quot;source&quot; : &#123;&quot;index&quot;:&quot;indexName&quot;&#125;,</div><div class="line">&quot;dest&quot; : &#123;&quot;index&quot;:&quot;new_indexName&quot;&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="创建索引类型映射"><a href="#创建索引类型映射" class="headerlink" title="创建索引类型映射"></a>创建索引类型映射</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;</div><div class="line">&#123;</div><div class="line">  &quot;properties&quot; : &#123;</div><div class="line">    &quot;name&quot; : &#123;</div><div class="line">     &quot;type&quot; : &quot;string&quot;</div><div class="line">       &#125;,</div><div class="line">    &quot;age&quot; : &#123;</div><div class="line">     &quot;type&quot; : &quot;integer&quot;</div><div class="line">       &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="获取索引类型字段映射"><a href="#获取索引类型字段映射" class="headerlink" title="获取索引类型字段映射"></a>获取索引类型字段映射</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/_mapping/&#123;type&#125;/&#123;field&#125;/text</div></pre></td></tr></table></figure>
+<h3 id="批量增加文档"><a href="#批量增加文档" class="headerlink" title="批量增加文档"></a>批量增加文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">POST host:port/&#123;index&#125;/&#123;type&#125;/_bulk</div><div class="line">    &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 1 &#125;&#125;</div><div class="line">    &#123; &quot;title&quot;: &quot;Elasticsearch: The Definitive Guide&quot;, &quot;authors&quot;: [&quot;clinton gormley&quot;, &quot;zachary tong&quot;], &quot;summary&quot; : &quot;A distibuted real-time search and analytics engine&quot;, &quot;publish_date&quot; : &quot;2015-02-07&quot;, &quot;num_reviews&quot;: 20, &quot;publisher&quot;: &quot;oreilly&quot; &#125;</div><div class="line">    &#123; &quot;index&quot;: &#123; &quot;_id&quot;: 2 &#125;&#125;</div><div class="line">    &#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125;</div></pre></td></tr></table></figure>
+<h3 id="增加文档"><a href="#增加文档" class="headerlink" title="增加文档"></a>增加文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">PUT host:port/&#123;index&#125;/&#123;type&#125;/&#123;id 可选&#125;</div><div class="line">&#123; &quot;title&quot;: &quot;Taming Text: How to Find, Organize, and Manipulate It&quot;, &quot;authors&quot;: [&quot;grant ingersoll&quot;, &quot;thomas morton&quot;, &quot;drew farris&quot;], &quot;summary&quot; : &quot;organize text using approaches such as full-text search, proper name recognition, clustering, tagging, information extraction, and summarization&quot;, &quot;publish_date&quot; : &quot;2013-01-24&quot;, &quot;num_reviews&quot;: 12, &quot;publisher&quot;: &quot;manning&quot; &#125;</div></pre></td></tr></table></figure>
+<h3 id="查询文档"><a href="#查询文档" class="headerlink" title="查询文档"></a>查询文档</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">GET host:port/&#123;index&#125;/&#123;type&#125;/&#123;id&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>可选参数<br>1，<em>{source}=false : 不返回某个字段。<br>2，</em>{source}<em>include,</em>{source}<em>exclude : 包含或过滤其中的某些字段。<br>3，</em>{source} : 只查询指定的某个字段。<br>4, _primary : 在主节点进行查询。<br>5, _local : 尽可能在本地节点进行查询。<br>6, refresh : 设置为true时，会在搜索操作前刷新相关的分片，保证可以及时的查询到结果。但会消耗系统的资源，除非有必要，正常情况不需要设置。<br>7, _mget : 多文档查询</p>
+</blockquote>
+<h3 id="通过Url参数搜索"><a href="#通过Url参数搜索" class="headerlink" title="通过Url参数搜索"></a>通过Url参数搜索</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">host:port/&#123;index&#125;/&#123;type&#125;/_search?&#123;参数&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>sort : 对指定字段进行排序，可以指定多个，按照书写顺序优先。<br>分页查询 ：可以通过from size组合来进行。from表示从第几行开始，size表示查询多少条文档。size的大小不能大于index.max_result_window这个参数的设置。数据量较大的时候，推荐使用scroll来查询。后续会进行分析对比。</p>
+</blockquote>
+<h1 id="查询DSL"><a href="#查询DSL" class="headerlink" title="查询DSL"></a>查询DSL</h1><h2 id="查询和过滤的区别"><a href="#查询和过滤的区别" class="headerlink" title="查询和过滤的区别"></a>查询和过滤的区别</h2><blockquote>
+<p>查询 ： 检查内容和条件是否匹配，计算_score元字段表示匹配度。<br>过滤 ： 不计算匹配得分，只是单纯的决定文档是否匹配。内容过滤主要用于过滤结构化的数据。</p>
+</blockquote>
+<h3 id="精确查找"><a href="#精确查找" class="headerlink" title="精确查找"></a>精确查找</h3><blockquote>
+<p>term : 可以用它处理数字（numbers）、布尔值（Booleans）、日期（dates）以及文本（text），term 查询会查找我们指定的精确值。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;term&quot; : &#123; </div><div class="line">                    &quot;price&quot; : 20</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>terms : 查询多个精确值</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;terms&quot; : &#123; </div><div class="line">                    &quot;price&quot; : [20, 30]</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p><font color="#DC143C" size="5">一定要了解 term 和 terms 是 包含（contains） 操作，而非 等值（equals)</font><br>&emsp;&emsp;如果我们有一个 term（词项）过滤器 { “term” : { “tags” : “search” } } ，它会与以下两个文档 同时 匹配：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">&#123; &quot;tags&quot; : [&quot;search&quot;] &#125;</div><div class="line">&#123; &quot;tags&quot; : [&quot;search&quot;, &quot;open_source&quot;] &#125;</div></pre></td></tr></table></figure></p>
+<p>可以通过对term增加tag_count参数来确保搜索结果的一致。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">GET /my_index/my_type/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                 &quot;bool&quot; : &#123;</div><div class="line">                    &quot;must&quot; : [</div><div class="line">                        &#123; &quot;term&quot; : &#123; &quot;tags&quot; : &quot;search&quot; &#125; &#125;, </div><div class="line">                        &#123; &quot;term&quot; : &#123; &quot;tag_count&quot; : 1 &#125; &#125; </div><div class="line">                    ]</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h3 id="constant-score-查询"><a href="#constant-score-查询" class="headerlink" title="constant_score 查询"></a>constant_score 查询</h3><blockquote>
+<p>A query that wraps another query and simply returns a constant score equal to the query boost for every document in the filter.(一个包含另一个查询的查询，只返回等于过滤器中每个文档的查询常数boost。)可以使用它来取代只有 filter 语句的 bool 查询。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;term&quot; : &#123; &quot;user&quot; : &quot;kimchy&quot;&#125;</div><div class="line">            &#125;,</div><div class="line">            &quot;boost&quot; : 1.2</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="范围搜索"><a href="#范围搜索" class="headerlink" title="范围搜索"></a>范围搜索</h3><p>&emsp;&emsp;抛出一个问题，如何在es中实现以下sql的功能？<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">SELECT document</div><div class="line">FROM   products</div><div class="line">WHERE  price BETWEEN 20 AND 40</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>在es中，通过range查询提供包含（inclusive）和不包含（exclusive）这两种范围表达式，可供组合的选项如下：</p>
+<blockquote>
+<p>gt: &gt; 大于（greater than）<br>lt: &lt; 小于（less than）<br>gte: &gt;= 大于或等于（greater than or equal to）<br>lte: &lt;= 小于或等于（less than or equal to）</p>
+</blockquote>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div></pre></td><td class="code"><pre><div class="line">GET /my_store/products/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;range&quot; : &#123;</div><div class="line">                    &quot;price&quot; : &#123;</div><div class="line">                        &quot;gte&quot; : 20,</div><div class="line">                        &quot;lt&quot;  : 40</div><div class="line">                    &#125;</div><div class="line">                &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<hr>
+<hr>
+<h3 id="组合过滤器"><a href="#组合过滤器" class="headerlink" title="组合过滤器"></a>组合过滤器</h3><p>&emsp;&emsp;抛出个问题，怎样用 Elasticsearch 来表达下面的 SQL ？<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">SELECT product</div><div class="line">FROM   products</div><div class="line">WHERE  (price = 20 OR productID = &quot;XHDK-A-1293-#fJ3&quot;)</div><div class="line">AND  (price != 30)</div></pre></td></tr></table></figure></p>
+<h4 id="布尔过滤器"><a href="#布尔过滤器" class="headerlink" title="布尔过滤器"></a>布尔过滤器</h4><p>&emsp;&emsp;一个 bool 过滤器由三部分组成：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">   &quot;bool&quot; : &#123;</div><div class="line">      &quot;must&quot; :     [],  //与AND等价</div><div class="line">      &quot;should&quot; :   [],  //与OR等价</div><div class="line">      &quot;must_not&quot; : [],  //与NOT等价</div><div class="line">   &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>bool 查询采取 more-matches-is-better 匹配越多越好的方式，所以每条 match 语句的评分结果会被加在一起，从而为每个文档提供最终的分数 _score .<br>看一个例子：</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line">GET /_search</div><div class="line">&#123;</div><div class="line">  &quot;query&quot;: &#123;</div><div class="line">    &quot;bool&quot;: &#123;</div><div class="line">      &quot;should&quot;: [</div><div class="line">        &#123; &quot;match&quot;: &#123; &quot;title&quot;:  &quot;War and Peace&quot; &#125;&#125;,</div><div class="line">        &#123; &quot;match&quot;: &#123; &quot;author&quot;: &quot;Leo Tolstoy&quot;   &#125;&#125;,</div><div class="line">        &#123; &quot;bool&quot;:  &#123;</div><div class="line">          &quot;should&quot;: [</div><div class="line">            &#123; &quot;match&quot;: &#123; &quot;translator&quot;: &quot;Constance Garnett&quot; &#125;&#125;,</div><div class="line">            &#123; &quot;match&quot;: &#123; &quot;translator&quot;: &quot;Louise Maude&quot;      &#125;&#125;</div><div class="line">          ]</div><div class="line">        &#125;&#125;</div><div class="line">      ]</div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>为什么将译者条件语句放入另一个独立的 bool 查询中呢？所有的四个 match 查询都是 should 语句，所以为什么不将 translator 语句与其他如 title 、 author 这样的语句放在同一层呢？</p>
+<p>答案在于评分的计算方式。 bool 查询运行每个 match 查询，再把评分加在一起，然后将结果与所有匹配的语句数量相乘，最后除以所有的语句数量。处于同一层的每条语句具有相同的权重。在前面这个例子中，包含 translator 语句的 bool 查询，只占总评分的三分之一。如果将 translator 语句与 title 和 author 两条语句放入同一层，那么 title 和 author 语句只贡献四分之一评分。</p>
+</blockquote>
+<h3 id="dis-max查询"><a href="#dis-max查询" class="headerlink" title="dis_max查询"></a>dis_max查询</h3><blockquote>
+<p>分离最大化查询 ：返回任一与查询匹配的文档，但只将最佳匹配的评分作为查询的评分结果。</p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;query&quot;: &#123;</div><div class="line">        &quot;dis_max&quot;: &#123;</div><div class="line">            &quot;queries&quot;: [</div><div class="line">                &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;Brown fox&quot; &#125;&#125;,</div><div class="line">                &#123; &quot;match&quot;: &#123; &quot;body&quot;:  &quot;Brown fox&quot; &#125;&#125;</div><div class="line">            ]</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>dis_max只会简单的使用单个最佳匹配语句的评分作为整体评分，可以增加一个tie_breaker这个参数将其他匹配语句的评分也考虑其中。</p>
+<blockquote>
+<p>tie_breaker 参数提供了一种 dis_max 和 bool 之间的折中选择，它的评分方式如下：<br> 1, 获得最佳匹配语句的评分 _score 。<br> 2, 将其他匹配语句的评分结果与 tie_breaker 相乘。<br> 3, 对以上评分求和并规范化。</p>
+</blockquote>
+<h3 id="多字段查询"><a href="#多字段查询" class="headerlink" title="多字段查询"></a>多字段查询</h3><p>当需要在多个字段进行相同的查询时，可以使用multi_match查询<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">&#123;</div><div class="line">    &quot;multi_match&quot;: &#123;</div><div class="line">        &quot;query&quot;:                &quot;Quick brown fox&quot;,</div><div class="line">        &quot;type&quot;:                 &quot;best_fields&quot;, </div><div class="line">        &quot;fields&quot;:               [ &quot;title_*&quot;, &quot;body^2&quot; ],</div><div class="line">        &quot;tie_breaker&quot;:          0.3,</div><div class="line">        &quot;minimum_should_match&quot;: &quot;30%&quot; </div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<blockquote>
+<p>1，字段可以通过通配符来指定，如 “title_*”.<br>2，字段可以用^加权，表示字段的重要性，在评分的时候做为加权。<br>3，type字段支持best_fields,most_fields,cross_fields,phrase,phrase_prefix等多种。</p>
+<ul>
+<li>best_fields:(默认)查找匹配任何字段的文档，但是使用最佳匹配字段的评分。</li>
+<li>most_fields:查找匹配任何字段的文档，结合每个字段的评分。</li>
+<li>cross_fields:例如通过first_name和last_name字段查询“will smith”的时候，最佳的匹配是will出现在一个字段，smith出现在另一个字段。</li>
+<li>phrase:在每个字段上运行短语匹配查询，结合每个字段的得分。</li>
+<li>phrase_prefix:在每个字段上运行短语前缀匹配查询。</li>
+</ul>
+</blockquote>
+<h2 id="null处理"><a href="#null处理" class="headerlink" title="null处理"></a>null处理</h2><p>在Es中，null, []空数组 和 [null] 所有这些都是等价的，它们无法存于倒排索引中。</p>
+<h3 id="exists-存在查询"><a href="#exists-存在查询" class="headerlink" title="exists 存在查询"></a>exists 存在查询</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">GET /my_index/posts/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;exists&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">等价于</div><div class="line"></div><div class="line">SELECT tags</div><div class="line">FROM   posts</div><div class="line">WHERE  tags IS NOT NULL</div></pre></td></tr></table></figure>
+<h3 id="missing-缺失查询"><a href="#missing-缺失查询" class="headerlink" title="missing 缺失查询"></a>missing 缺失查询</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">GET /my_index/posts/_search</div><div class="line">&#123;</div><div class="line">    &quot;query&quot; : &#123;</div><div class="line">        &quot;constant_score&quot; : &#123;</div><div class="line">            &quot;filter&quot; : &#123;</div><div class="line">                &quot;missing&quot; : &#123; &quot;field&quot; : &quot;tags&quot; &#125;</div><div class="line">            &#125;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">等价于</div><div class="line"></div><div class="line">SELECT tags</div><div class="line">FROM   posts</div><div class="line">WHERE  tags IS NULL</div></pre></td></tr></table></figure>
+<h2 id="minimum-should-match"><a href="#minimum-should-match" class="headerlink" title="minimum_should_match"></a>minimum_should_match</h2><blockquote>
+<p>通过此参数控制最少需要匹配的should语句的数量，可以为数字或百分比。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line">GET /my_index/my_type/_search</div><div class="line">&#123;</div><div class="line">  &quot;query&quot;: &#123;</div><div class="line">    &quot;bool&quot;: &#123;</div><div class="line">      &quot;should&quot;: [</div><div class="line">        &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;brown&quot; &#125;&#125;,</div><div class="line">        &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;fox&quot;   &#125;&#125;,</div><div class="line">        &#123; &quot;match&quot;: &#123; &quot;title&quot;: &quot;dog&quot;   &#125;&#125;</div><div class="line">      ],</div><div class="line">      &quot;minimum_should_match&quot;: 2 </div><div class="line">    &#125;</div><div class="line">  &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+</blockquote>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[elasticsearch 基础]]></title>
+      <url>/2017/08/16/elasticsearch-basic/</url>
+      <content type="html"><![CDATA[<h1 id="elasticsearch几个重要的概念"><a href="#elasticsearch几个重要的概念" class="headerlink" title="elasticsearch几个重要的概念"></a>elasticsearch几个重要的概念</h1><h3 id="cluster"><a href="#cluster" class="headerlink" title="cluster"></a>cluster</h3><blockquote>
+<p>代表一个集群，集群中有多个节点，其中有一个为主节点，这个主节点是可以通过选举产生的，主从节点是对于集群内部来说的。es的一个概念就是去中心化，字面上理解就是无中心节点，这是对于集群外部来说的，因为从外部来看es集群，在逻辑上是个整体，你与任何一个节点的通信和与整个es集群通信是等价的。</p>
+</blockquote>
+<h3 id="node"><a href="#node" class="headerlink" title="node"></a>node</h3><blockquote>
+<p>组成集群的每一个服务器称之为节点。</p>
+</blockquote>
+<h3 id="shards"><a href="#shards" class="headerlink" title="shards"></a>shards</h3><blockquote>
+<p>代表索引分片，es可以把一个完整的索引分成多个分片，这样的好处是可以把一个大的索引拆分成多个，分布到不同的节点上。构成分布式搜索。分片的数量只能在索引创建前指定，并且索引创建后不能更改。<br>分片分主分片和副分片，每个文档都存储在一个分片中，当存储时，系统会首先存储在主分片中，然后会复制到不同的副本中。每个主分片有零个到多个副本，副分片主要有两个目的：<br>    1，增加高可用性。<br>    2，提高性能。</p>
+</blockquote>
+<h3 id="replicas"><a href="#replicas" class="headerlink" title="replicas"></a>replicas</h3><blockquote>
+<p>代表索引副本，es可以设置多个索引的副本，副本的作用一是提高系统的容错性，当个某个节点某个分片损坏或丢失时可以从副本中恢复。二是提高es的查询效率，es会自动对搜索请求进行负载均衡。</p>
+</blockquote>
+<h3 id="recovery"><a href="#recovery" class="headerlink" title="recovery"></a>recovery</h3><blockquote>
+<p>代表数据恢复或叫数据重新分布，es在有节点加入或退出时会根据机器的负载对索引分片进行重新分配，挂掉的节点重新启动时也会进行数据恢复。</p>
+</blockquote>
+<h3 id="gateway"><a href="#gateway" class="headerlink" title="gateway"></a>gateway</h3><blockquote>
+<p>代表es索引的持久化存储方式，es默认是先把索引存放到内存中，当内存满了时再持久化到硬盘。当这个es集群关闭再重新启动时就会从gateway中读取索引数据。es支持多种类型的gateway，有本地文件系统（默认），分布式文件系统，Hadoop的HDFS和amazon的s3云存储服务。</p>
+</blockquote>
+<h3 id="index／type／document"><a href="#index／type／document" class="headerlink" title="index／type／document"></a>index／type／document</h3><blockquote>
+<p>索引，具有相同结构的文档集合。对应关系数据库的databases.<br>类型，在索引中，可以定义一个或多个类型，类型是索引的逻辑分区。对应关系数据库的table。<br>文档，真正存储的数据内容。对应关系数据库的一行记录。</p>
+</blockquote>
+]]></content>
+      
+        <categories>
+            
+            <category> elasticsearch </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> elasticsearch </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[容器扩展点]]></title>
+      <url>/2017/08/14/spring-extendion/</url>
+      <content type="html"><![CDATA[<h1 id="通过BeanPostProcessor定制Bean"><a href="#通过BeanPostProcessor定制Bean" class="headerlink" title="通过BeanPostProcessor定制Bean"></a>通过BeanPostProcessor定制Bean</h1><p>&#8194;&#8194;&#8194;&#8194;BeanPostProcessor定义了回调方法，通过实现这个回调方法，你可以提供你自己的(或者重写容器默认的)实例化逻辑，依赖分析逻辑等等。如果你想在Spring容器完成实例化，配置，和初始化bean之后，实例化一些自定义的逻辑，你可以插入一个或多个BeanPostProcessor的实现。<br>&#8194;&#8194;&#8194;&#8194;可以配置多个BeanPostProcessor实例，通过设置order属性来控制这些BeanPostProcessors执行的顺序。</p>
+<blockquote>
+<p>BeanPostProcessor作用在一个bean(或者对象)的实例上;也就是说，Spring IoC实例化一个bean实例之后， BeanPostProcessor，才开始进行处理。 BeanPostProcessor作用范围是每一个容器。这仅仅和你正在使用容器有关。如果你在一个容器中定义了一个BeanPostProcessor ，它将仅仅后置处理那个容器中的beans。换言之，一个容器中的beans不会被另一个容器中的BeanPostProcessor处理，即使这两个容器，具有相同的父类。<br>&#8194;&#8194;&#8194;&#8194;ApplicationContext会自动地检测所有定义在配置元文件中，并实现了BeanPostProcessor接口的bean。该ApplicationContext注册这些beans作为后置处理器，使他们可以在bean创建完成之后被调用。bean后置处理器可以像其他bean一样部署到容器中。实现了BeanPostProcessor接口的类是特殊的,会被容器特殊处理。所有BeanPostProcessors和他们直接引用的 beans都会在容器启动的时候被实例化,作为ApplicationContext特殊启动阶段的一部分。</p>
+</blockquote>
+<h1 id="通过BeanFactoryPostProcessor定制Bean"><a href="#通过BeanFactoryPostProcessor定制Bean" class="headerlink" title="通过BeanFactoryPostProcessor定制Bean"></a>通过BeanFactoryPostProcessor定制Bean</h1><p>&#8194;&#8194;&#8194;&#8194;与BeanPostProcessor类似，但有一个主要的不同点：BeanFactoryPostProcessor操作bean的配置元数据；也就是说，Spring的IoC容器允许 BeanFactoryPostProcessor来读取配置元数据并在容器实例化任何bean(除了BeanFactoryPostProcessor)之前可以修改它。</p>
+]]></content>
+      
+        <categories>
+            
+            <category> spring </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> spring </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[spring-applicationContext]]></title>
+      <url>/2017/08/11/spring-applicationContext/</url>
+      <content type="html"><![CDATA[<h1 id="ApplicationContext"><a href="#ApplicationContext" class="headerlink" title="ApplicationContext"></a>ApplicationContext</h1><h3 id="beanFactory和ApplicationContext的区别"><a href="#beanFactory和ApplicationContext的区别" class="headerlink" title="beanFactory和ApplicationContext的区别"></a>beanFactory和ApplicationContext的区别</h3><blockquote>
+<p>&#8194;&#8194;&#8194;&#8194;BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。<br>&#8194;&#8194;&#8194;&#8194;ApplicationContext接口,它由BeanFactory接口派生而来，因而提供BeanFactory所有的功能。ApplicationContext以一种更向面向框架的方式工作以及对上下文进行分层和实现继承，ApplicationContext包还提供了以下的功能：  </p>
+<ul>
+<li>MessageSource, 提供国际化的消息访问  </li>
+<li>资源访问，如URL和文件: ApplicationContext扩展了ResourceLoader(资源加载器)接口，从而可以用来加载多个Resource，而BeanFactory是没有扩展ResourceLoader.  </li>
+<li>事件传播  </li>
+<li>载入多个（有继承关系）上下文 ，使得每一个上下文都专注于一个特定的层次，比如应用的web层.<br>&#8194;&#8194;BeanFactroy采用的是延迟加载形式来注入Bean的，即只有在使用到某个Bean时(调用getBean())，才对该Bean进行加载实例化，这样，我们就不能发现一些存在的Spring的配置问题。而ApplicationContext则相反，它是在容器启动时，一次性创建了所有的Bean。这样，在容器启动时，我们就可以发现Spring中存在的配置错误。<br>&#8194;&#8194;BeanFactory和ApplicationContext都支持BeanPostProcessor、BeanFactoryPostProcessor的使用，但两者之间的区别是：BeanFactory需要手动注册，而ApplicationContext则是自动注册</li>
+</ul>
+</blockquote>
+<h3 id="功能扩展"><a href="#功能扩展" class="headerlink" title="功能扩展"></a>功能扩展</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div></pre></td><td class="code"><pre><div class="line">protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) &#123;</div><div class="line">		// 设置类加载器为当前加载器</div><div class="line">		beanFactory.setBeanClassLoader(getClassLoader());</div><div class="line">		</div><div class="line">		// 增加对el表达式的支持</div><div class="line">		beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));</div><div class="line">		</div><div class="line">		// 增加bean的属性编辑.例如Bean的属性为Date类型时，无法直接注入，则需要使用自定义的属性编辑器</div><div class="line">		beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this, getEnvironment()));</div><div class="line"></div><div class="line">		// 添加BeanPostProcessor</div><div class="line">		beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this));</div><div class="line">		</div><div class="line">		// 设置几个忽略自动装配的接口</div><div class="line">		beanFactory.ignoreDependencyInterface(EnvironmentAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(EmbeddedValueResolverAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(ApplicationEventPublisherAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(MessageSourceAware.class);</div><div class="line">		beanFactory.ignoreDependencyInterface(ApplicationContextAware.class);</div><div class="line"></div><div class="line">		// 注册依赖的类，一旦检测到属性为BeanFactory类型便会将beanFactory的实例注册进去</div><div class="line">		beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory);</div><div class="line">		beanFactory.registerResolvableDependency(ResourceLoader.class, this);</div><div class="line">		beanFactory.registerResolvableDependency(ApplicationEventPublisher.class, this);</div><div class="line">		beanFactory.registerResolvableDependency(ApplicationContext.class, this);</div><div class="line"></div><div class="line">		// Register early post-processor for detecting inner beans as ApplicationListeners.</div><div class="line">		beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(this));</div><div class="line"></div><div class="line">		// 增加对AspectJ的支持</div><div class="line">		if (beanFactory.containsBean(LOAD_TIME_WEAVER_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.addBeanPostProcessor(new LoadTimeWeaverAwareProcessor(beanFactory));</div><div class="line">			// Set a temporary ClassLoader for type matching.</div><div class="line">			beanFactory.setTempClassLoader(new ContextTypeMatchClassLoader(beanFactory.getBeanClassLoader()));</div><div class="line">		&#125;</div><div class="line"></div><div class="line">		// Register default environment beans.</div><div class="line">		if (!beanFactory.containsLocalBean(ENVIRONMENT_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.registerSingleton(ENVIRONMENT_BEAN_NAME, getEnvironment());</div><div class="line">		&#125;</div><div class="line">		if (!beanFactory.containsLocalBean(SYSTEM_PROPERTIES_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.registerSingleton(SYSTEM_PROPERTIES_BEAN_NAME, getEnvironment().getSystemProperties());</div><div class="line">		&#125;</div><div class="line">		if (!beanFactory.containsLocalBean(SYSTEM_ENVIRONMENT_BEAN_NAME)) &#123;</div><div class="line">			beanFactory.registerSingleton(SYSTEM_ENVIRONMENT_BEAN_NAME, getEnvironment().getSystemEnvironment());</div><div class="line">		&#125;</div><div class="line">	&#125;</div></pre></td></tr></table></figure>
+<h2 id="BeanFactoryPostProcessor-容器级别的Bean扩展器"><a href="#BeanFactoryPostProcessor-容器级别的Bean扩展器" class="headerlink" title="BeanFactoryPostProcessor 容器级别的Bean扩展器"></a>BeanFactoryPostProcessor 容器级别的Bean扩展器</h2><blockquote>
+<p>BeanFactoryPostProcessor的作用域范围是容器级的，仅对容器中的Bean进行后置处理。<br>比较典型的几种<br> 1， PropertyPlaceholderConfigurer : 对容器中的所有引用的属性值替换</p>
+</blockquote>
+<pre><code><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line">   public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException &#123;</div><div class="line">	try &#123;</div><div class="line">		Properties mergedProps = mergeProperties();</div><div class="line"></div><div class="line">		// Convert the merged properties, if necessary.</div><div class="line">		convertProperties(mergedProps);</div><div class="line"></div><div class="line">		// Let the subclass process the properties.</div><div class="line">		processProperties(beanFactory, mergedProps);</div><div class="line">	&#125;</div><div class="line">	catch (IOException ex) &#123;</div><div class="line">		throw new BeanInitializationException(&quot;Could not load properties&quot;, ex);</div><div class="line">	&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+</code></pre><p> 2， BeanDefinitionRegistryPostProcessor： 对BeanDefinition进行一些后置的自定义操作<br> <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div></pre></td><td class="code"><pre><div class="line"> import org.springframework.beans.BeansException;</div><div class="line"> import org.springframework.beans.factory.support.BeanDefinitionRegistry;</div><div class="line"> import  org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;</div><div class="line"> import org.springframework.beans.factory.support.RootBeanDefinition;</div><div class="line"> import org.springframework.stereotype.Component;</div><div class="line"> </div><div class="line">@Component</div><div class="line">public class CustomServiceRegistryPostProcessor </div><div class="line">        implements BeanDefinitionRegistryPostProcessor &#123;</div><div class="line"> </div><div class="line">    @Override</div><div class="line">    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry)</div><div class="line">            throws BeansException &#123;</div><div class="line"> </div><div class="line">        RootBeanDefinition beanDefinition = </div><div class="line">                new RootBeanDefinition(MyServiceImpl.class); //Service实现</div><div class="line">        serviceDefinition.setTargetType(MyService.class); //Service接口</div><div class="line">        serviceDefinition.setRole(BeanDefinition.ROLE_APPLICATION);</div><div class="line">        registry.registerBeanDefinition(&quot;myBeanName&quot;, beanDefinition );</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<h3 id="应用"><a href="#应用" class="headerlink" title="应用"></a>应用</h3><p> 在Mybatis与Spring的整合中，就利用到了BeanDefinitionRegistryPostProcessor来对Mapper的BeanDefinition进行了后置的自定义处理。</p>
+<p>在Spring的配置文件中，我们会配置以下代码来扫描Mapper：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">&lt;bean class=&quot;org.mybatis.spring.mapper.MapperScannerConfigurer&quot;&gt;</div><div class="line">	&lt;property name=&quot;basePackage&quot; value=&quot;com.rason.nba.mapper&quot; /&gt;</div><div class="line">	&lt;property name=&quot;sqlSessionFactoryBeanName&quot; value=&quot;sqlSessionFactory&quot;&gt;&lt;/property&gt;</div><div class="line">&lt;/bean&gt;</div></pre></td></tr></table></figure></p>
+<p>其中org.mybatis.spring.mapper.MapperScannerConfigurer类就实现了BeanDefinitionRegistryPostProcessor接口来对Mapper进行自定义的注册操作。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div></pre></td><td class="code"><pre><div class="line">// 代码有删减</div><div class="line">public class MapperScannerConfigurer implements BeanDefinitionRegistryPostProcessor&#123;</div><div class="line">    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException &#123;</div><div class="line">	    ClassPathMapperScanner scanner = new ClassPathMapperScanner(registry);</div><div class="line">	    scanner.scan(StringUtils.tokenizeToStringArray(this.basePackage, </div><div class="line">  	&#125;</div><div class="line">&#125;</div><div class="line">public class ClassPathMapperScanner extends ClassPathBeanDefinitionScanner &#123;</div><div class="line">	@Override</div><div class="line">    public Set&lt;BeanDefinitionHolder&gt; doScan(String... basePackages) &#123;</div><div class="line"> 		Set&lt;BeanDefinitionHolder&gt; beanDefinitions = super.doScan(basePackages);//首先调用Spring默认的扫描装配操作</div><div class="line">	    if (beanDefinitions.isEmpty()) &#123;</div><div class="line">	</div><div class="line">		&#125; else &#123;</div><div class="line">			for (BeanDefinitionHolder holder : beanDefinitions) &#123;//然后循环对每一个BeanDefinition进行一些自定义的操作</div><div class="line">				GenericBeanDefinition definition = (GenericBeanDefinition) holder.getBeanDefinition();</div><div class="line">				definition.getPropertyValues().add(&quot;mapperInterface&quot;, definition.getBeanClassName());</div><div class="line">        		definition.setBeanClass(MapperFactoryBean.class);</div><div class="line">        		definition.getPropertyValues().add(&quot;addToConfig&quot;, this.addToConfig);</div><div class="line">			&#125;</div><div class="line">		&#125;</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+]]></content>
+      
+        <categories>
+            
+            <category> spring </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> spring </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[spring annotation]]></title>
+      <url>/2017/08/11/spring-annotation/</url>
+      <content type="html"><![CDATA[<h1 id="常用的Bean相关的注解"><a href="#常用的Bean相关的注解" class="headerlink" title="常用的Bean相关的注解"></a>常用的Bean相关的注解</h1><h3 id="Repository、-Service、-Controller-和-Component-—-将类标识为Bean，由spring容器管理。通过上述注解标识的-Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注-Bean-的同时能够指定-Bean-的作用域，引入了-Scope-注解。使用该注解时只需提供作用域的名称。"><a href="#Repository、-Service、-Controller-和-Component-—-将类标识为Bean，由spring容器管理。通过上述注解标识的-Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注-Bean-的同时能够指定-Bean-的作用域，引入了-Scope-注解。使用该注解时只需提供作用域的名称。" class="headerlink" title="@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。"></a>@Repository、@Service、@Controller 和 @Component — 将类标识为Bean，由spring容器管理。通过上述注解标识的 Bean，其默认作用域是”singleton”，为了配合这四个注解，在标注 Bean 的同时能够指定 Bean 的作用域，引入了 @Scope 注解。使用该注解时只需提供作用域的名称。</h3><h3 id="PostConstruct、-PreDestroy-—-指定生命周期回调方法，分别对应init-method-和-destroy-method-属性。"><a href="#PostConstruct、-PreDestroy-—-指定生命周期回调方法，分别对应init-method-和-destroy-method-属性。" class="headerlink" title="@PostConstruct、@PreDestroy — 指定生命周期回调方法，分别对应init-method 和 destroy-method 属性。"></a>@PostConstruct、@PreDestroy — 指定生命周期回调方法，分别对应init-method 和 destroy-method 属性。</h3><h3 id="Required-—-对bean的依赖进行检查。"><a href="#Required-—-对bean的依赖进行检查。" class="headerlink" title="@Required — 对bean的依赖进行检查。"></a>@Required — 对bean的依赖进行检查。</h3><p><bean> 标签提供了 dependency-check 属性用于进行依赖检查。该属性的取值包括以下几种：</bean></p>
+<ul>
+<li>none – 默认不执行依赖检查。可以在 <beans> 标签上使用 * default-dependency-check 属性改变默认值。</beans></li>
+<li>simple – 对原始基本类型和集合类型进行检查。</li>
+<li>objects – 对复杂类型进行检查（除了 simple 所检查类型之外的其他类型）。</li>
+<li>all – 对所有类型进行检查。</li>
+</ul>
+<h3 id="Resource、-Autowired-—-Bean的自动装配策略。"><a href="#Resource、-Autowired-—-Bean的自动装配策略。" class="headerlink" title="@Resource、@Autowired — Bean的自动装配策略。"></a>@Resource、@Autowired — Bean的自动装配策略。</h3><ul>
+<li>no – 显式指定不使用自动装配。</li>
+<li>byName – 如果存在一个和当前属性名字一致的 Bean，则使用该 Bean 进行注入。如果名称匹配但是类型不匹配，则抛出异常。如果没有匹配的类型，则什么也不做。</li>
+<li>byType – 如果存在一个和当前属性类型一致的 Bean ( 相同类型或者子类型 )，则使用该 Bean 进行注入。byType 能够识别工厂方法，即能够识别 factory-method 的返回类型。如果存在多个类型一致的 Bean，则抛出异常。如果没有匹配的类型，则什么也不做。</li>
+<li>constructor – 与 byType 类似，只不过它是针对构造函数注入而言的。如果当前没有与构造函数的参数类型匹配的 Bean，则抛出异常。使用该种装配模式时，优先匹配参数最多的构造函数。</li>
+<li>autodetect – 根据 Bean 的自省机制决定采用 byType 还是 constructor 进行自动装配。如果 Bean 提供了默认的构造函数，则采用 byType；否则采用 constructor 进行自动装配。<h4 id="两者的区别"><a href="#两者的区别" class="headerlink" title="两者的区别"></a>两者的区别</h4><blockquote>
+<p>@Autowired and @Inject<br>1, Matches by Type<br>2, Restricts by Qualifiers<br>3, Matches by Name<br>@Resource<br>1, Matches by Name<br>2, Matches by Type<br>3, Restricts by Qualifiers (ignored if match is found by name)<br>‘@Autowired’ 和‘@Inject’的报错信息完全相同，他们都是通过 ‘AutowiredAnnotationBeanPostProcessor’ 类实现的依赖注入，二者具有可互换性。<br>‘@Resource’通过 ‘CommonAnnotationBeanPostProcessor’ 类实现依赖注入</p>
+</blockquote>
+</li>
+</ul>
+]]></content>
+      
+        <categories>
+            
+            <category> spring </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> spring </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[spring bean 加载流程]]></title>
+      <url>/2017/08/10/spring/</url>
+      <content type="html"><![CDATA[<h1 id="几个重要的类"><a href="#几个重要的类" class="headerlink" title="几个重要的类"></a>几个重要的类</h1><ul>
+<li>ResourceLoader: 资源加载器，根据给定的资源文件地址，返回对应的Resource。常用的有ClassPathResource,UrlResource,FileSystemResource.</li>
+<li>DocumentLoader: 定义从资源文件加载到转换为document的功能。</li>
+<li>BeanDefinitionReader: 定义资源文件的读取并转化为BeanDefinition的功能。</li>
+<li>DefaultBeanDefinitionDocumentReader：定义读取document并注册beanDefinition的功能。</li>
+<li>BeanDefinitionParseDelegate: 定义解析element的各种方法。</li>
+<li>BeanDefinitionRegistry: 定义对beanDefinition的各种增删改查的操作。</li>
+<li>BeanDefinition: 对应配置文件中的一个bean标签,包含多种属性，例如className,lookUp,lazyInit,dependsOn,FactoryMethod</li>
+</ul>
+<h1 id="Bean初始化的流程"><a href="#Bean初始化的流程" class="headerlink" title="Bean初始化的流程"></a>Bean初始化的流程</h1><blockquote>
+<h2 id="从配置文件到bean的注册"><a href="#从配置文件到bean的注册" class="headerlink" title="从配置文件到bean的注册"></a>从配置文件到bean的注册</h2><p> 1，资源文件的读取（ResourceLoader，DocumentLoader）<br> 2，转化为beanDefinition对象（BeanDefinitionReader，DefaultBeanDefinitionDocumentReader，BeanDefinitionParseDelegate）<br> 3，将bean注册到容器中（BeanDefinitionRegistry）</p>
+</blockquote>
+<h2 id="Bean的加载"><a href="#Bean的加载" class="headerlink" title="Bean的加载"></a>Bean的加载</h2><h3 id="spring如何解决依赖注入的循环依赖问题"><a href="#spring如何解决依赖注入的循环依赖问题" class="headerlink" title="spring如何解决依赖注入的循环依赖问题"></a>spring如何解决依赖注入的循环依赖问题</h3><blockquote>
+<p>通过构造器注入构成的循环依赖，此依赖是无法解决的，只能抛出BeanCurrentlyInCreationException异常表示循环依赖。<br>对于setter注入造成的依赖是通过Spring容器提前暴露刚完成构造器注入但未完成其他步骤（如setter注入）的Bean来完成的，而且只能解决单例作用域的Bean循环依赖。</p>
+<blockquote>
+<p>1、Spring容器创建单例“circleA” Bean，首先根据无参构造器创建Bean，并暴露一个“ObjectFactory ”用于返回一个提前暴露一个创建中的Bean，并将“circleA” 标识符放到“当前创建Bean池”；然后进行setter注入“circleB”；<br>2、Spring容器创建单例“circleB” Bean，首先根据无参构造器创建Bean，并暴露一个“ObjectFactory”用于返回一个提前暴露一个创建中的Bean，并将“circleB” 标识符放到“当前创建Bean池”，然后进行setter注入“circleC”；<br>3、Spring容器创建单例“circleC” Bean，首先根据无参构造器创建Bean，并暴露一个“ObjectFactory ”用于返回一个提前暴露一个创建中的Bean，并将“circleC” 标识符放到“当前创建Bean池”，然后进行setter注入“circleA”；进行注入“circleA”时由于提前暴露了“ObjectFactory”工厂从而使用它返回提前暴露一个创建中的Bean；<br>4、最后在依赖注入“circleB”和“circleA”，完成setter注入。</p>
+</blockquote>
+<p>对于“prototype”作用域Bean，Spring容器无法完成依赖注入，因为“prototype”作用域的Bean，Spring容器不进行缓存，因此无法提前暴露一个创建中的Bean。</p>
+</blockquote>
+<h3 id="在Bean加载过程中涉及的几种map"><a href="#在Bean加载过程中涉及的几种map" class="headerlink" title="在Bean加载过程中涉及的几种map"></a>在Bean加载过程中涉及的几种map</h3><ul>
+<li>singletonObjects: 用于保存beanName和创建的Bean实例之间的关系。</li>
+<li>singletonFactories: 用于保存beanName和创建bean的工厂之间的关系。</li>
+<li>earlySingletonObjects: 保存beanName和创建的bean实例之间的关系，与singletonObjects不同在于当一个bean被放入此map中时，即使还处于创建过程中，也可以通过getBean方法获取，主要用于检测循环依赖。</li>
+<li>registeredSingletons：用于保存当前所有已注册的bean.</li>
+</ul>
+<hr>
+<h4 id="使用FactoryBean"><a href="#使用FactoryBean" class="headerlink" title="使用FactoryBean"></a>使用FactoryBean</h4><p>&#8194;&#8194;&#8194;&#8194;跟普通Bean不同，其返回的对象不是指定类的一个实例，其返回的是该FactoryBean的getObject方法所返回的对象。在Spring框架内部，有很多地方有FactoryBean的实现类，它们在很多应用如(Spring的AOP、ORM、事务管理)及与其它第三框架(ehCache)集成时都有体现.</p>
+<p>FactoryBean接口有3个方法：<br>&#8194;&#8194;&#8194;&#8194;Object getObject():返回本工厂创建的对象实例。此实例也许是共享的，依赖于该工厂返回的是单例或者是原型。<br>&#8194;&#8194;&#8194;&#8194;boolean isSingleton():如果FactoryBean返回的是单例,该方法返回值为true,否则为false<br>&#8194;&#8194;&#8194;&#8194;Class getObjectType():返回对象类型。对象类型是getObject()方法返回的对象的类型，如果不知道的类型则返回null。</p>
+<p>FactoryBean概念和接口在Spring框架中大量使用。Spring内置的有超过50个实现。<br>&#8194;&#8194;&#8194;&#8194;当使用ApplicationContext的getBean()方法获取FactoryBean实例本身而不是它所产生的bean，则要使用&amp;符号+id。比如，现有FactoryBean，它有id，在容器上调用getBean(“myBean”)将返回FactoryBean所产生的bean，调用getBean(“&amp;myBean”)将返回FactoryBean它本身的实例。</p>
+<h2 id="Bean的创建"><a href="#Bean的创建" class="headerlink" title="Bean的创建"></a>Bean的创建</h2><h4 id="creatBean"><a href="#creatBean" class="headerlink" title="creatBean"></a>creatBean</h4><p>&#8194;&#8194;&#8194;&#8194;在创建Bean对象时，如果没有需要覆盖的方法（beanDefinition.getMethodOverrides()为空，则默认使用反射的方式创建对象。如果有需要覆盖的方法，则需要使用动态代理的方式来实现。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div></pre></td><td class="code"><pre><div class="line">public Object instantiate(RootBeanDefinition bd, String beanName, BeanFactory owner) &#123;</div><div class="line">		// Don&apos;t override the class with CGLIB if no overrides.</div><div class="line">		if (bd.getMethodOverrides().isEmpty()) &#123;</div><div class="line">			Constructor&lt;?&gt; constructorToUse;</div><div class="line">			synchronized (bd.constructorArgumentLock) &#123;</div><div class="line">				constructorToUse = (Constructor&lt;?&gt;) bd.resolvedConstructorOrFactoryMethod;</div><div class="line">				if (constructorToUse == null) &#123;</div><div class="line">					final Class&lt;?&gt; clazz = bd.getBeanClass();</div><div class="line">					if (clazz.isInterface()) &#123;</div><div class="line">						throw new BeanInstantiationException(clazz, &quot;Specified class is an interface&quot;);</div><div class="line">					&#125;</div><div class="line">					try &#123;</div><div class="line">						if (System.getSecurityManager() != null) &#123;</div><div class="line">							constructorToUse = AccessController.doPrivileged(new PrivilegedExceptionAction&lt;Constructor&lt;?&gt;&gt;() &#123;</div><div class="line">								@Override</div><div class="line">								public Constructor&lt;?&gt; run() throws Exception &#123;</div><div class="line">									return clazz.getDeclaredConstructor((Class[]) null);</div><div class="line">								&#125;</div><div class="line">							&#125;);</div><div class="line">						&#125;</div><div class="line">						else &#123;</div><div class="line">							constructorToUse =	clazz.getDeclaredConstructor((Class[]) null);</div><div class="line">						&#125;</div><div class="line">						bd.resolvedConstructorOrFactoryMethod = constructorToUse;</div><div class="line">					&#125;</div><div class="line">					catch (Throwable ex) &#123;</div><div class="line">						throw new BeanInstantiationException(clazz, &quot;No default constructor found&quot;, ex);</div><div class="line">					&#125;</div><div class="line">				&#125;</div><div class="line">			&#125;</div><div class="line">			return BeanUtils.instantiateClass(constructorToUse);</div><div class="line">		&#125;</div><div class="line">		else &#123;</div><div class="line">			// Must generate CGLIB subclass.</div><div class="line">			return instantiateWithMethodInjection(bd, beanName, owner);</div><div class="line">		&#125;</div><div class="line">	&#125;</div></pre></td></tr></table></figure></p>
+<h3 id="populateBean-设置Bean属性注入"><a href="#populateBean-设置Bean属性注入" class="headerlink" title="populateBean 设置Bean属性注入"></a>populateBean 设置Bean属性注入</h3><p>&#8194;&#8194;&#8194;&#8194;Spring IoC容器根据Bean名称或者类型进行autowiring自动依赖注入</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line">protected void populateBean(String beanName, AbstractBeanDefinition mbd, BeanWrapper bw) &#123;  </div><div class="line">        //获取Bean定义的属性值，并对属性值进行处理  </div><div class="line">        PropertyValues pvs = mbd.getPropertyValues();  </div><div class="line">        ……  </div><div class="line">        //对依赖注入处理，首先处理autowiring自动装配的依赖注入  </div><div class="line">        if (mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_NAME ||  </div><div class="line">                mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_TYPE) &#123;  </div><div class="line">            MutablePropertyValues newPvs = new MutablePropertyValues(pvs);  </div><div class="line">            //根据Bean名称进行autowiring自动装配处理  </div><div class="line">            if (mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_NAME) &#123;  </div><div class="line">                autowireByName(beanName, mbd, bw, newPvs);  </div><div class="line">            &#125;  </div><div class="line">            //根据Bean类型进行autowiring自动装配处理  </div><div class="line">            if (mbd.getResolvedAutowireMode() == RootBeanDefinition.AUTOWIRE_BY_TYPE) &#123;  </div><div class="line">                autowireByType(beanName, mbd, bw, newPvs);  </div><div class="line">            &#125;  </div><div class="line">        &#125;  </div><div class="line">//对非autowiring的属性进行依赖注入处理</div></pre></td></tr></table></figure>
+<h3 id="initializeBean-初始化Bean"><a href="#initializeBean-初始化Bean" class="headerlink" title="initializeBean 初始化Bean"></a>initializeBean 初始化Bean</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div></pre></td><td class="code"><pre><div class="line">protected Object initializeBean(final String beanName, final Object bean, RootBeanDefinition mbd) &#123;</div><div class="line">		if (System.getSecurityManager() != null) &#123;</div><div class="line">			AccessController.doPrivileged(new PrivilegedAction&lt;Object&gt;() &#123;</div><div class="line">				@Override</div><div class="line">				public Object run() &#123;</div><div class="line">					invokeAwareMethods(beanName, bean);</div><div class="line">					return null;</div><div class="line">				&#125;</div><div class="line">			&#125;, getAccessControlContext());</div><div class="line">		&#125;</div><div class="line">		else &#123;</div><div class="line">		//实现Aware接口，注入感知的对象</div><div class="line">			invokeAwareMethods(beanName, bean);</div><div class="line">		&#125;</div><div class="line"></div><div class="line">		Object wrappedBean = bean;</div><div class="line">		//实现BeanPostProcessor,应用postProcessBeforeInitialization方法。</div><div class="line">		//在Bean的初始化前提供回调入口</div><div class="line">		if (mbd == null || !mbd.isSynthetic()) &#123;</div><div class="line">			wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);</div><div class="line">		&#125;</div><div class="line"></div><div class="line"></div><div class="line">		try &#123;</div><div class="line">		//应用配置的init-method方法</div><div class="line">			invokeInitMethods(beanName, wrappedBean, mbd);</div><div class="line">		&#125;</div><div class="line">		catch (Throwable ex) &#123;</div><div class="line">			throw new BeanCreationException(</div><div class="line">					(mbd != null ? mbd.getResourceDescription() : null),</div><div class="line">					beanName, &quot;Invocation of init method failed&quot;, ex);</div><div class="line">		&#125;</div><div class="line"></div><div class="line">		//实现BeanPostProcessor,应用postProcessBeforeInitialization方法。</div><div class="line">		//在Bean的初始化之后提供回调入口</div><div class="line">		if (mbd == null || !mbd.isSynthetic()) &#123;</div><div class="line">			wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);</div><div class="line">		&#125;</div><div class="line">		return wrappedBean;</div><div class="line">	&#125;</div></pre></td></tr></table></figure>
+<hr>
+<h3 id="上一张图"><a href="#上一张图" class="headerlink" title="上一张图"></a>上一张图</h3><p><img src="../images/beanInit.png" alt=""></p>
+]]></content>
+      
+        <categories>
+            
+            <category> spring </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> spring </tag>
+            
+        </tags>
+        
+    </entry>
+    
+  
+  
 </search>
